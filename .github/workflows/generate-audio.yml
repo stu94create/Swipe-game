@@ -1,0 +1,47 @@
+name: Generate audio
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Regenerate even if MP3 already exists'
+        type: boolean
+        default: false
+      only:
+        description: 'Only IDs starting with this prefix (e.g. t- or w-bridie). Leave blank for all.'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run generator
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: |
+          args=()
+          if [ "${{ inputs.force }}" = "true" ]; then args+=(--force); fi
+          if [ -n "${{ inputs.only }}" ]; then args+=("--only=${{ inputs.only }}"); fi
+          node scripts/generate-audio.mjs "${args[@]}"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audio/
+          if git diff --staged --quiet; then
+            echo "No audio changes to commit."
+          else
+            git commit -m "Generate audio with ElevenLabs"
+            git push
+          fi

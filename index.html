@@ -23,7 +23,7 @@
     --brown-soft: #5a4a37;
   }
 
-- { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
 height: 100%;
@@ -36,9 +36,9 @@ touch-action: manipulation;
 }
 
 body {
-font-family: ‘Atkinson Hyperlegible’, sans-serif;
-background: var(–cream);
-color: var(–brown);
+font-family: 'Atkinson Hyperlegible', sans-serif;
+background: var(--cream);
+color: var(--brown);
 background-image:
 radial-gradient(at 20% 15%, rgba(192, 138, 62, 0.10) 0%, transparent 45%),
 radial-gradient(at 85% 85%, rgba(31, 78, 90, 0.08) 0%, transparent 45%);
@@ -64,28 +64,28 @@ padding: 2rem;
 gap: 2.5rem;
 }
 .start-screen .title {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-weight: 600;
 font-size: clamp(2.5rem, 11vw, 3.5rem);
 line-height: 1;
-color: var(–teal-deep);
-font-variation-settings: ‘opsz’ 144;
+color: var(--teal-deep);
+font-variation-settings: 'opsz' 144;
 letter-spacing: -0.02em;
 }
 .start-screen .subtitle {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-size: 1.15rem;
 font-style: italic;
-color: var(–brown-soft);
+color: var(--brown-soft);
 margin-top: 0.5rem;
 }
 .start-button {
-font-family: ‘Atkinson Hyperlegible’, sans-serif;
+font-family: 'Atkinson Hyperlegible', sans-serif;
 font-weight: 700;
 font-size: 1.3rem;
 padding: 1.2rem 3rem;
-background: var(–teal);
-color: var(–cream-light);
+background: var(--teal);
+color: var(--cream-light);
 border: none;
 border-radius: 999px;
 cursor: pointer;
@@ -99,7 +99,7 @@ box-shadow: 0 2px 10px rgba(31, 78, 90, 0.25);
 .start-note {
 max-width: 20rem;
 font-size: 0.9rem;
-color: var(–brown-soft);
+color: var(--brown-soft);
 line-height: 1.5;
 }
 
@@ -115,17 +115,17 @@ padding: 0.9rem 1rem 0.7rem;
 border-bottom: 1px solid rgba(58, 46, 31, 0.12);
 }
 .chapter-label {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-style: italic;
 font-size: 0.85rem;
-color: var(–brown-soft);
+color: var(--brown-soft);
 letter-spacing: 0.02em;
 }
 .chapter-title {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-weight: 600;
 font-size: 1.4rem;
-color: var(–teal-deep);
+color: var(--teal-deep);
 }
 
 .play-area {
@@ -141,17 +141,17 @@ position: relative;
 overflow: hidden;
 }
 .instruction {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-weight: 500;
 font-size: clamp(1.4rem, 5vw, 1.9rem);
 line-height: 1.35;
-color: var(–teal-deep);
+color: var(--teal-deep);
 max-width: 22rem;
 }
 .hint {
 margin-top: 1.2rem;
 font-size: 1rem;
-color: var(–brown-soft);
+color: var(--brown-soft);
 font-style: italic;
 min-height: 1.4em;
 }
@@ -167,7 +167,7 @@ transition: opacity 0.3s;
 .speaking-indicator.active { opacity: 0.7; }
 .speaking-indicator span {
 width: 5px;
-background: var(–teal);
+background: var(--teal);
 border-radius: 3px;
 animation: bounce 1s ease-in-out infinite;
 }
@@ -180,7 +180,7 @@ animation: bounce 1s ease-in-out infinite;
 }
 
 .play-area.success::before {
-content: ‘’;
+content: '';
 position: absolute;
 inset: 0;
 background: radial-gradient(circle, rgba(230, 184, 100, 0.35) 0%, transparent 65%);
@@ -197,11 +197,11 @@ pointer-events: none;
 padding: 0.8rem 1rem;
 text-align: center;
 font-size: 0.9rem;
-color: var(–brown-soft);
+color: var(--brown-soft);
 border-top: 1px solid rgba(58, 46, 31, 0.12);
 background: rgba(250, 243, 227, 0.5);
 }
-.scrapbook-bar .streak { color: var(–gold); font-weight: 700; }
+.scrapbook-bar .streak { color: var(--gold); font-weight: 700; }
 
 /* ––––– Complete screen ––––– */
 .complete-screen {
@@ -215,7 +215,7 @@ text-align: center;
 gap: 1.5rem;
 }
 .scroll {
-background: var(–cream-light);
+background: var(--cream-light);
 border: 1px solid rgba(192, 138, 62, 0.35);
 border-radius: 12px;
 padding: 2rem 1.5rem;
@@ -223,9 +223,9 @@ max-width: 22rem;
 box-shadow: 0 6px 28px rgba(58, 46, 31, 0.10);
 }
 .scroll h3 {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-weight: 600;
-color: var(–teal-deep);
+color: var(--teal-deep);
 margin-bottom: 1rem;
 font-size: 1.3rem;
 }
@@ -234,20 +234,20 @@ list-style: none;
 text-align: left;
 }
 .scroll li {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-style: italic;
-color: var(–brown);
+color: var(--brown);
 line-height: 1.6;
 padding: 0.4rem 0;
 border-bottom: 1px dashed rgba(192, 138, 62, 0.25);
 }
 .scroll li:last-child { border-bottom: none; }
 .replay-button {
-font-family: ‘Atkinson Hyperlegible’, sans-serif;
+font-family: 'Atkinson Hyperlegible', sans-serif;
 font-weight: 700;
 padding: 1rem 2.2rem;
-background: var(–gold);
-color: var(–cream-light);
+background: var(--gold);
+color: var(--cream-light);
 border: none;
 border-radius: 999px;
 font-size: 1rem;
@@ -260,19 +260,19 @@ box-shadow: 0 4px 16px rgba(192, 138, 62, 0.35);
 text-align: center;
 }
 .complete-heading .title {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-weight: 600;
 font-size: clamp(2.5rem, 11vw, 3.5rem);
 line-height: 1;
-color: var(–teal-deep);
-font-variation-settings: ‘opsz’ 144;
+color: var(--teal-deep);
+font-variation-settings: 'opsz' 144;
 letter-spacing: -0.02em;
 }
 .complete-heading .subtitle {
-font-family: ‘Fraunces’, serif;
+font-family: 'Fraunces', serif;
 font-size: 1.05rem;
 font-style: italic;
-color: var(–brown-soft);
+color: var(--brown-soft);
 margin-top: 0.5rem;
 }
 
@@ -284,11 +284,11 @@ align-items: center;
 gap: 0.4rem;
 }
 .wander-button {
-font-family: ‘Atkinson Hyperlegible’, sans-serif;
+font-family: 'Atkinson Hyperlegible', sans-serif;
 font-weight: 700;
 padding: 1.15rem 2.6rem;
-background: var(–teal);
-color: var(–cream-light);
+background: var(--teal);
+color: var(--cream-light);
 border: none;
 border-radius: 999px;
 font-size: 1.15rem;
@@ -297,9 +297,9 @@ box-shadow: 0 6px 24px rgba(31, 78, 90, 0.3);
 }
 .wander-button:active { transform: translateY(2px); }
 .replay-link {
-font-family: ‘Atkinson Hyperlegible’, sans-serif;
+font-family: 'Atkinson Hyperlegible', sans-serif;
 font-size: 0.92rem;
-color: var(–brown-soft);
+color: var(--brown-soft);
 background: transparent;
 border: none;
 padding: 0.5rem 1rem;
@@ -316,11 +316,11 @@ border-top: 1px solid rgba(58, 46, 31, 0.12);
 background: rgba(250, 243, 227, 0.5);
 }
 .wander-done {
-font-family: ‘Atkinson Hyperlegible’, sans-serif;
+font-family: 'Atkinson Hyperlegible', sans-serif;
 font-weight: 400;
 font-style: italic;
 font-size: 0.95rem;
-color: var(–brown-soft);
+color: var(--brown-soft);
 background: transparent;
 border: none;
 padding: 0.5rem 1.4rem;

@@ -382,10 +382,6 @@ body.complete .complete-screen { display: flex; }
       <div class="title">Ballycrann</div>
       <div class="subtitle">Anytime you like</div>
     </div>
-    <div class="scroll" id="scrapbookScroll" hidden>
-      <h3>From your morning walk</h3>
-      <ul id="scrapbookList"></ul>
-    </div>
     <div class="complete-actions">
       <button class="wander-button" id="wanderBtn">Wander again</button>
       <button class="replay-link" id="replayBtn">Or restart the tutorial</button>
@@ -607,17 +603,6 @@ function updateBar() {
     `${text} · Streak: <span class="streak">${streak}</span>`;
 }
 function scrapbookAdd(line) { scrapbook.push(line); updateBar(); }
-function renderScrapbook() {
-  const scroll = document.getElementById('scrapbookScroll');
-  const list = document.getElementById('scrapbookList');
-  list.innerHTML = '';
-  scrapbook.forEach(line => {
-    const li = document.createElement('li');
-    li.textContent = line;
-    list.appendChild(li);
-  });
-  scroll.hidden = scrapbook.length === 0;
-}
 
 // -------- Scene runner --------
 let repromptTimer = null;
@@ -1027,7 +1012,6 @@ function exitWander() {
   document.body.classList.remove('is-wander');
   document.body.classList.remove('in-game');
   document.body.classList.add('complete');
-  renderScrapbook();
   // Restore tutorial header in case they replay
   document.querySelector('#gameScreen .chapter-label').textContent = 'Tutorial';
   document.querySelector('#gameScreen .chapter-title').textContent = 'A Morning Walk';

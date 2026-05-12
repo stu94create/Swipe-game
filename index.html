@@ -32,7 +32,7 @@ overscroll-behavior: none;
 -webkit-user-select: none;
 user-select: none;
 -webkit-tap-highlight-color: transparent;
-touch-action: manipulation;
+touch-action: none;
 }
 
 body {
@@ -403,7 +403,7 @@ body.complete .complete-screen { display: flex; }
 
 // -------- Tunables --------
 const DOUBLE_TAP_WINDOW = 700;   // generous — finger difficulty
-const SWIPE_MIN_DISTANCE = 24;   // px — forgiving for short swipes
+const SWIPE_MIN_DISTANCE = 12;   // px — fires on barely-perceptible movement
 const TAP_MAX_DISTANCE = 10;     // px before it counts as a swipe
 const TAP_MAX_TIME = 450;        // ms
 const REPROMPT_AFTER = 9000;     // ms
@@ -618,25 +618,41 @@ function almostId(target)   { return target === 'double-tap' ? 'almost-double-ta
 
 // -------- Gesture detection --------
 let touchStartX = 0, touchStartY = 0, touchStartT = 0;
+let touchInProgress = false;
 let lastTapTime = 0;
 let gestureHandler = null;
 let waitingForGesture = false;
 
+// Helper so transitions into "waiting" reset stale touch data — prevents a
+// touch that began on the Begin button or during narration from being read as
+// the first gesture of the new phase.
+function setWaiting(v) {
+  waitingForGesture = v;
+  if (v) { touchInProgress = false; lastTapTime = 0; }
+}
+
 function bindGestures() {
-  const area = document.getElementById('playArea');
-  area.addEventListener('touchstart', onTouchStart, { passive: false });
-  area.addEventListener('touchend', onTouchEnd, { passive: false });
-  area.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  // Bind on document so swipes that start near a screen edge (where iOS
+  // tries to intercept for back-navigation) and pass through any element
+  // still register.
+  document.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('touchend', onTouchEnd, { passive: false });
+  document.addEventListener('touchcancel', () => { touchInProgress = false; }, { passive: false });
+  document.addEventListener('touchmove', e => { if (waitingForGesture) e.preventDefault(); }, { passive: false });
 }
 function onTouchStart(e) {
-  if (e.touches.length !== 1) return;
+  if (e.touches.length !== 1) { touchInProgress = false; return; }
   const t = e.touches[0];
   touchStartX = t.clientX;
   touchStartY = t.clientY;
   touchStartT = Date.now();
+  touchInProgress = true;
 }
 function onTouchEnd(e) {
-  if (!waitingForGesture) return;
+  if (!waitingForGesture) { touchInProgress = false; return; }
+  if (!touchInProgress) return;
+  touchInProgress = false;
+
   const t = e.changedTouches[0];
   const dx = t.clientX - touchStartX;
   const dy = t.clientY - touchStartY;
@@ -722,7 +738,7 @@ function practiceGesture(target, introId, vignetteIds, onDone) {
   clearReprompt();
   const reps = vignetteIds.length;
   let count = 0;
-  waitingForGesture = true;
+  setWaiting(true);
   setInstruction(gestureName[target], `(${count} of ${reps})`);
 
   gestureHandler = (g) => {
@@ -735,7 +751,7 @@ function practiceGesture(target, introId, vignetteIds, onDone) {
       sounds.success();
       const vId = vignetteIds[count - 1];
       if (count >= reps) {
-        waitingForGesture = false;
+        setWaiting(false);
         gestureHandler = null;
         setInstruction(gestureName[target], 'Done!');
         speakLine(vId, () => setTimeout(onDone, 400));
@@ -806,7 +822,7 @@ function scene7() {
 
 function setupMiniScene() {
   let stage = 0;
-  waitingForGesture = true;
+  setWaiting(true);
   setInstruction('Find Pat\'s dog', 'Swipe right twice');
 
   gestureHandler = (g) => {
@@ -847,7 +863,7 @@ function setupMiniScene() {
         updateBar();
         flashSuccess();
         sounds.finale();
-        waitingForGesture = false;
+        setWaiting(false);
         gestureHandler = null;
         clearReprompt();
         setTimeout(chapterComplete, 1300);
@@ -861,7 +877,7 @@ function setupMiniScene() {
 }
 
 function chapterComplete() {
-  waitingForGesture = false;
+  setWaiting(false);
   gestureHandler = null;
   clearReprompt();
   speakLine('t-complete', () => enterWander(true));
@@ -905,11 +921,11 @@ function enterWander(skipIntro = false) {
   gestureHandler = handleWanderGesture;
 
   if (skipIntro) {
-    waitingForGesture = true;
+    setWaiting(true);
   } else {
-    waitingForGesture = false;
-    speakLine('w-intro', () => { waitingForGesture = true; });
-    setTimeout(() => { if (wanderMode) waitingForGesture = true; }, 12000);
+    setWaiting(false);
+    speakLine('w-intro', () => { setWaiting(true); });
+    setTimeout(() => { if (wanderMode) setWaiting(true); }, 12000);
   }
 }
 
@@ -955,7 +971,7 @@ function greetPerson() {
 function exitWander() {
   cancelCurrent();
   wanderMode = false;
-  waitingForGesture = false;
+  setWaiting(false);
   gestureHandler = null;
   document.body.classList.remove('is-wander');
   document.body.classList.remove('in-game');

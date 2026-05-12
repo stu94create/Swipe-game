@@ -516,9 +516,62 @@ if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
 }
+// -------- Line audio (ElevenLabs MP3s, fall back to speechSynthesis) --------
+const LINES = {};
+const linePromises = {};
+let currentLineSource = null;
+let speechGen = 0;
+
+async function loadLines() {
+  try {
+    const res = await fetch('audio/lines.json');
+    if (res.ok) Object.assign(LINES, await res.json());
+  } catch (e) {}
+}
+
+function loadLineAudio(id) {
+  if (audioBuffers[id]) return Promise.resolve(true);
+  if (linePromises[id]) return linePromises[id];
+  linePromises[id] = loadSound(id, `audio/${id}.mp3`);
+  return linePromises[id];
+}
+
+function preloadLines() {
+  Object.keys(LINES).forEach(id => { loadLineAudio(id); });
+}
+
+function cancelCurrent() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (currentLineSource) {
+    currentLineSource._cancelled = true;
+    try { currentLineSource.stop(); } catch (e) {}
+    currentLineSource = null;
+  }
+  const ind = document.getElementById('speakingIndicator');
+  if (ind) ind.classList.remove('active');
+}
+
+function playLineBuffer(id, onEnd) {
+  if (!audioBuffers[id] || !audioCtx) return false;
+  const ind = document.getElementById('speakingIndicator');
+  const src = audioCtx.createBufferSource();
+  const gain = audioCtx.createGain();
+  gain.gain.value = 1.0;
+  src.buffer = audioBuffers[id];
+  src.connect(gain).connect(audioCtx.destination);
+  if (ind) ind.classList.add('active');
+  src.onended = () => {
+    if (ind) ind.classList.remove('active');
+    if (currentLineSource === src) currentLineSource = null;
+    if (!src._cancelled && onEnd) onEnd();
+  };
+  try { src.start(); } catch (e) { return false; }
+  currentLineSource = src;
+  return true;
+}
+
 function speak(text, onEnd) {
   if (!('speechSynthesis' in window)) { if (onEnd) setTimeout(onEnd, 1500); return; }
-  speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   if (preferredVoice) u.voice = preferredVoice;
   u.rate = 0.95;
@@ -530,6 +583,38 @@ function speak(text, onEnd) {
   u.onerror = () => { ind.classList.remove('active'); if (onEnd) onEnd(); };
   speechSynthesis.speak(u);
 }
+
+async function speakLine(id, onEnd) {
+  const myGen = ++speechGen;
+  cancelCurrent();
+
+  const loaded = await loadLineAudio(id);
+  if (myGen !== speechGen) return;
+
+  if (loaded && audioBuffers[id]) {
+    playLineBuffer(id, () => { if (myGen === speechGen && onEnd) onEnd(); });
+    return;
+  }
+
+  const text = LINES[id];
+  if (!text) { if (onEnd) onEnd(); return; }
+  speak(text, () => { if (myGen === speechGen && onEnd) onEnd(); });
+}
+
+function speakSequence(ids, onEnd) {
+  let i = 0;
+  function next() {
+    if (i >= ids.length) { if (onEnd) onEnd(); return; }
+    speakLine(ids[i++], next);
+  }
+  next();
+}
+
+function cueId(target, isLast) {
+  return isLast ? `cue-once-more-${target}` : `cue-again-${target}`;
+}
+function repromptId(target) { return `reprompt-${target}`; }
+function almostId(target)   { return target === 'double-tap' ? 'almost-double-tap' : `almost-${target}`; }
 
 // -------- Gesture detection --------
 let touchStartX = 0, touchStartY = 0, touchStartT = 0;
@@ -626,29 +711,20 @@ function setInstruction(text, hint = '') {
   document.getElementById('hint').textContent = hint;
 }
 function clearReprompt() { if (repromptTimer) { clearTimeout(repromptTimer); repromptTimer = null; } }
-function startReprompt(promptText) {
+function startReprompt(promptId) {
   clearReprompt();
   repromptTimer = setTimeout(() => {
-    if (waitingForGesture && gestureHandler) speak(promptText);
+    if (waitingForGesture && gestureHandler) speakLine(promptId);
   }, REPROMPT_AFTER);
 }
 
-function narrate(text, onDone) {
+function practiceGesture(target, introId, vignetteIds, onDone) {
   clearReprompt();
-  waitingForGesture = false;
-  gestureHandler = null;
-  setInstruction(text);
-  speak(text, onDone);
-}
-
-function practiceGesture(target, introText, vignettes, onDone) {
-  clearReprompt();
-  const reps = vignettes.length;
+  const reps = vignetteIds.length;
   let count = 0;
   waitingForGesture = true;
   setInstruction(gestureName[target], `(${count} of ${reps})`);
 
-  // Handler set BEFORE speech so user can swipe any time once they've heard the cue
   gestureHandler = (g) => {
     clearReprompt();
     if (g === target) {
@@ -657,31 +733,26 @@ function practiceGesture(target, introText, vignettes, onDone) {
       updateBar();
       flashSuccess();
       sounds.success();
-      const line = vignettes[count - 1];
+      const vId = vignetteIds[count - 1];
       if (count >= reps) {
         waitingForGesture = false;
         gestureHandler = null;
         setInstruction(gestureName[target], 'Done!');
-        speak(line, () => setTimeout(onDone, 400));
+        speakLine(vId, () => setTimeout(onDone, 400));
       } else {
         setInstruction(gestureName[target], `(${count} of ${reps})`);
-        const remaining = reps - count;
-        const cue = remaining === 1
-          ? `Once more, ${gestureName[target].toLowerCase()}.`
-          : `${gestureName[target]} again.`;
-        speak(line + ' ' + cue, () => startReprompt(`Try ${gestureName[target].toLowerCase()}.`));
+        const isLast = reps - count === 1;
+        speakSequence([vId, cueId(target, isLast)],
+          () => startReprompt(repromptId(target)));
       }
     } else {
       sounds.almost();
-      const hint = target === 'double-tap'
-        ? 'Almost — two quick taps with one finger.'
-        : `Almost — try ${gestureName[target].toLowerCase()} again.`;
-      speak(hint, () => startReprompt(`Try ${gestureName[target].toLowerCase()}.`));
+      speakLine(almostId(target),
+        () => startReprompt(repromptId(target)));
     }
   };
 
-  // Speak the intro — user can swipe during or after
-  speak(introText, () => startReprompt(`Try ${gestureName[target].toLowerCase()}.`));
+  speakLine(introId, () => startReprompt(repromptId(target)));
 }
 
 // -------- Chapter flow --------
@@ -697,65 +768,40 @@ function startChapter() {
 }
 
 function scene1() {
-  practiceGesture('swipe-right',
-    'Welcome to Ballycrann. I\'m Mary, your guide. We\'re standing at the harbour, boats clinking in the breeze. To walk east along the high street, swipe right with one finger, anywhere on the screen.',
-    [
-      'Past the bakery, the smell of warm soda bread on the air.',
-      'Along the stone wall, ivy spilling over the top.',
-      'You\'ve reached the post office, with its bright red door.'
-    ],
-    scene3
-  );
+  practiceGesture('swipe-right', 't-scene1-intro',
+    ['t-scene1-vignette-1', 't-scene1-vignette-2', 't-scene1-vignette-3'],
+    scene3);
 }
 function scene3() {
   scrapbookAdd('Walked east to the post office.');
   sounds.step();
-  practiceGesture('swipe-left',
-    'Now, to walk back west, swipe left.',
-    [
-      'Past the stone wall again, cobbles uneven underfoot.',
-      'The bakery — Eileen waves from the doorway.',
-      'Home to the harbour. You can hear the rigging clinking.'
-    ], scene4);
+  practiceGesture('swipe-left', 't-scene3-intro',
+    ['t-scene3-vignette-1', 't-scene3-vignette-2', 't-scene3-vignette-3'],
+    scene4);
 }
 function scene4() {
   scrapbookAdd('Walked back west to the harbour.');
   sounds.step();
-  practiceGesture('swipe-up',
-    'To look up — at the spire, or the gulls overhead — swipe up.',
-    [
-      'The church spire, a single rook circling above.',
-      'A patch of blue between two chimneys.',
-      'Three gulls cutting across the cloud.'
-    ], scene5);
+  practiceGesture('swipe-up', 't-scene4-intro',
+    ['t-scene4-vignette-1', 't-scene4-vignette-2', 't-scene4-vignette-3'],
+    scene5);
 }
 function scene5() {
   scrapbookAdd('Looked up and watched the gulls.');
-  practiceGesture('swipe-down',
-    'And to look down at the ground, swipe down.',
-    [
-      'Smooth cobbles, worn by a hundred years of feet.',
-      'A copper penny — heads up, lucky for some.',
-      'A sea-smoothed stone, shaped like a small heart.'
-    ], scene6);
+  practiceGesture('swipe-down', 't-scene5-intro',
+    ['t-scene5-vignette-1', 't-scene5-vignette-2', 't-scene5-vignette-3'],
+    scene6);
 }
 function scene6() {
   scrapbookAdd('Found a sea-smoothed stone on the path.');
-  practiceGesture('double-tap',
-    'Last one. When you find someone you\'d like to greet, you double tap. Two quick taps with one finger.',
-    [
-      'Mary at the corner shop. Lovely day, she says.',
-      'Old Tom on the bench. He tips his cap to you.',
-      'Eileen the baker, waving from her doorway.'
-    ], scene7);
+  practiceGesture('double-tap', 't-scene6-intro',
+    ['t-scene6-vignette-1', 't-scene6-vignette-2', 't-scene6-vignette-3'],
+    scene7);
 }
 function scene7() {
   scrapbookAdd('Greeted three neighbours along the way.');
   setupMiniScene();
-  speak(
-    'Beautifully done. Now let\'s put it together. Pat\'s gone and lost his dog. Swipe right twice to walk down the lane, then listen carefully.',
-    () => startReprompt('Swipe right to walk down the lane.')
-  );
+  speakLine('t-scene7-intro', () => startReprompt('t-mini-reprompt-walk'));
 }
 
 function setupMiniScene() {
@@ -774,26 +820,26 @@ function setupMiniScene() {
         sounds.step();
         if (stage === 2) {
           setInstruction('Find Pat\'s dog', 'Listen…');
-          speak('Past the iron gate, into the field. Listen carefully…', () => {
+          speakLine('t-mini-stage2', () => {
             setTimeout(() => {
               sounds.bark();
               setTimeout(() => sounds.bark(), 350);
               setTimeout(() => {
-                speak('There — you can hear him. Double tap to call him over.',
-                  () => startReprompt('Double tap to greet the dog.'));
+                speakLine('t-mini-bark-cue',
+                  () => startReprompt('t-mini-reprompt-greet'));
                 setInstruction('Find Pat\'s dog', 'Double tap to greet');
               }, 850);
             }, 300);
           });
         } else {
           setInstruction('Find Pat\'s dog', `Swipe right again (${stage} of 2)`);
-          speak('Down the lane, past the holly hedge. Once more, swipe right.',
-            () => startReprompt('Swipe right again.'));
+          speakLine('t-mini-stage1',
+            () => startReprompt('cue-again-swipe-right'));
         }
       } else {
         sounds.almost();
-        speak('Almost — try swiping right.',
-          () => startReprompt('Swipe right to walk down the lane.'));
+        speakLine('t-mini-almost-swipe',
+          () => startReprompt('t-mini-reprompt-walk'));
       }
     } else {
       if (g === 'double-tap') {
@@ -807,8 +853,8 @@ function setupMiniScene() {
         setTimeout(chapterComplete, 1300);
       } else {
         sounds.almost();
-        speak('Almost — double tap to greet the dog.',
-          () => startReprompt('Double tap to greet the dog.'));
+        speakLine('t-mini-almost-greet',
+          () => startReprompt('t-mini-reprompt-greet'));
       }
     }
   };
@@ -818,11 +864,7 @@ function chapterComplete() {
   waitingForGesture = false;
   gestureHandler = null;
   clearReprompt();
-
-  speak(
-    'Beautifully done. The tutorial is complete. You\'re now at the harbour in Ballycrann. Swipe right to walk east through the village, swipe left to walk back. Swipe up or down to look around. Double tap to say hello to anyone you meet.',
-    () => enterWander(true)
-  );
+  speakLine('t-complete', () => enterWander(true));
 }
 
 // =============================================
@@ -832,116 +874,17 @@ let wanderMode = false;
 let wanderIndex = 0;
 
 const wanderPositions = [
-  {
-    description: 'You\'re at the harbour. Boats clinking in the breeze.',
-    up: 'Gulls wheel against the cloud. One drops a clam onto the stones.',
-    down: 'Wet cobbles, a length of frayed rope, a fishing net coiled by a bollard.'
-  },
-  {
-    description: 'Past the bakery. The smell of warm soda bread on the air.',
-    up: 'A wisp of smoke from the chimney. A pigeon dozing on the slate.',
-    down: 'Flour on the doorstep. Boot prints in it from earlier.'
-  },
-  {
-    description: 'Bridie McGregor\'s doorway. She\'s there with a basket of eggs.',
-    person: 'Bridie McGregor',
-    greetings: [
-      'Bridie smiles. "A grand morning. Mind yourself on the cobbles."',
-      'Bridie nods. "Are you keeping well? Tell your mother I was asking after her."',
-      'Bridie holds the door open a moment. "There\'s tea in the pot if you\'ve a minute."'
-    ],
-    up: 'A trellis of late roses on the wall. A robin in the hedge.',
-    down: 'Slate paving stones. A cat on the step watching you.'
-  },
-  {
-    description: 'The post office. Patrick is sweeping the step, humming to himself.',
-    person: 'Patrick O\'Donovan',
-    greetings: [
-      '"Good morning, good morning," says Patrick. "A fine day for the walking."',
-      'Patrick leans on his brush. "You\'ll be needing stamps one of these days. Drop in."',
-      '"Have you ever been to Boston?" Patrick begins, then catches himself. "Ah, another time."'
-    ],
-    up: 'The post office sign, paint chipped. A swallow\'s nest under the eaves.',
-    down: 'A coin face-down in a crack between the cobbles.'
-  },
-  {
-    description: 'The schoolhouse. Children\'s voices from inside, doing their sums.',
-    person: 'Mr Breen',
-    greetings: [
-      'Mr Breen lifts his hand. "Good morning. It\'s good morning, isn\'t it? Yes. Yes, of course."',
-      'Mr Breen nods slowly. "You\'ve grown. Or maybe you haven\'t. The years are a tricky thing."',
-      'Mr Breen smiles gently. "Off you go now. Mind the road."'
-    ],
-    up: 'The bell above the gable, dark and still. A weathercock pointing east.',
-    down: 'Worn flagstones, scuffed by fifty years of small feet.'
-  },
-  {
-    description: 'Brian Blunt has come across the road with his clipboard.',
-    person: 'Brian Blunt',
-    greetings: [
-      'Brian booms: "Did you see the match? Cone work, I\'m telling you, it\'s the future."',
-      'Brian claps you on the shoulder. "Right so. Right so. On with it."',
-      '"Committee meeting Tuesday at eight sharp," says Brian. "Don\'t be late."'
-    ],
-    up: 'A line of cloud moving fast. Someone\'s washing on a line above the street.',
-    down: 'Cobbles, and a bit of straw blown from a hayrick.'
-  },
-  {
-    description: 'The chapel. Bell quiet at this hour. Piano music drifts from inside.',
-    person: 'Mary Mooney',
-    greetings: [
-      'Mary tilts her head. "You walk on the balls of your feet. Did you know? It\'s good for you."',
-      '"Are you musical?" Mary asks. "You should be. Everyone should be."',
-      'Mary considers you. "There\'s a chord I\'ve been working on. You\'d like it. Maybe."'
-    ],
-    up: 'The chapel spire, a single rook circling above.',
-    down: 'Smooth flagstones polished by Sunday shoes.'
-  },
-  {
-    description: 'Catherine O\'Reilly\'s cottage. She\'s at her parlour window.',
-    person: 'Catherine O\'Reilly',
-    greetings: [
-      'Catherine taps the glass. "I saw you yesterday too. Are you keeping out of trouble?"',
-      '"Lovely morning," Catherine calls through the glass. "Mind how you go on the lane."',
-      'Catherine smiles. "Come in for tea. Or don\'t. It\'s a fine day either way."'
-    ],
-    up: 'Ivy climbing the wall to the chimney. A wren darts in and out.',
-    down: 'A border of flowers, weeded by old hands. A snail.'
-  },
-  {
-    description: 'The well at the top of the lane. A blackbird singing somewhere in the holly. Dr O\'Loughlin is passing by with his bag.',
-    person: 'Dr O\'Loughlin',
-    greetings: [
-      'The doctor sets down his bag. "You\'re keeping well, I hope. No need to call me out today."',
-      '"A walk is the best medicine," says the doctor. "And the cheapest."',
-      'The doctor tips his hat. "I\'ll see you maybe never, please God."'
-    ],
-    up: 'Holly leaves overhead, bright red berries. A bee among the late flowers.',
-    down: 'The well\'s iron bucket, cold to look at. Moss between the stones.'
-  },
-  {
-    description: 'The pub. Barney is at the door, wiping his hands on his apron.',
-    person: 'Barney',
-    greetings: [
-      '"Will you be in tonight?" says Barney. "There\'s a fire on already."',
-      '"A grand morning altogether," says Barney. "Mind yourself on the road."',
-      'Barney nods. "Margaret\'s doing the books inside. I\'ll tell her you said hello."'
-    ],
-    up: 'A weathered sign hanging from the bracket — The Crown, faded gold.',
-    down: 'Sawdust on the flagstones. A few stout-coloured rings.'
-  },
-  {
-    description: 'Back along the high street. Young James and his dog stop on the path.',
-    person: 'James',
-    sound: 'bark',
-    greetings: [
-      '"His name is Spot," James says. "He\'s mostly good. He came back on his own this morning."',
-      'James looks up, solemn as a judge. "It\'s a Saturday. I have to go to confession later. The dog doesn\'t."',
-      'James waves carefully. "Good morning. The dog says good morning too. I think."'
-    ],
-    up: 'Washing on a line strung between two windows. A pillowcase moving in the breeze.',
-    down: 'Spot the dog sniffing at your shoes. Tail wagging cautiously.'
-  }
+  { id: 'harbour' },
+  { id: 'bakery' },
+  { id: 'bridie', person: 'Bridie McGregor', greetCount: 3 },
+  { id: 'post', person: 'Patrick O\'Donovan', greetCount: 3 },
+  { id: 'school', person: 'Mr Breen', greetCount: 3 },
+  { id: 'brian', person: 'Brian Blunt', greetCount: 3 },
+  { id: 'chapel', person: 'Mary Mooney', greetCount: 3 },
+  { id: 'catherine', person: 'Catherine O\'Reilly', greetCount: 3 },
+  { id: 'doctor', person: 'Dr O\'Loughlin', greetCount: 3 },
+  { id: 'pub', person: 'Barney', greetCount: 3 },
+  { id: 'james', person: 'James', greetCount: 3, sound: 'bark' }
 ];
 
 function enterWander(skipIntro = false) {
@@ -956,7 +899,8 @@ function enterWander(skipIntro = false) {
   lastTapTime = 0;
 
   ensureAudio();
-  setInstruction(wanderPositions[0].description, 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet');
+  const firstId = `w-${wanderPositions[0].id}-desc`;
+  setInstruction(LINES[firstId] || '', 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet');
 
   gestureHandler = handleWanderGesture;
 
@@ -964,10 +908,7 @@ function enterWander(skipIntro = false) {
     waitingForGesture = true;
   } else {
     waitingForGesture = false;
-    speak(
-      'Back in Ballycrann, at the harbour. Swipe right to walk east through the village, swipe left to walk back. Swipe up or down to look around. Double tap to say hello to anyone you meet.',
-      () => { waitingForGesture = true; }
-    );
+    speakLine('w-intro', () => { waitingForGesture = true; });
     setTimeout(() => { if (wanderMode) waitingForGesture = true; }, 12000);
   }
 }
@@ -983,44 +924,36 @@ function handleWanderGesture(g) {
 
 function moveWander(delta) {
   const newIndex = wanderIndex + delta;
-  if (newIndex < 0) {
-    speak('You\'re at the harbour. The road ends here. No further west.');
-    return;
-  }
-  if (newIndex >= wanderPositions.length) {
-    speak('The road bends out of Ballycrann. Just fields and sheep beyond. Maybe another day.');
-    return;
-  }
+  if (newIndex < 0) { speakLine('w-edge-west'); return; }
+  if (newIndex >= wanderPositions.length) { speakLine('w-edge-east'); return; }
   wanderIndex = newIndex;
   sounds.step();
   flashSuccess();
   const pos = wanderPositions[wanderIndex];
-  setInstruction(pos.description, 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet');
+  const descId = `w-${pos.id}-desc`;
+  setInstruction(LINES[descId] || '', 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet');
   if (pos.sound && sounds[pos.sound]) sounds[pos.sound]();
-  speak(pos.description);
+  speakLine(descId);
 }
 
 function lookAt(direction) {
   const pos = wanderPositions[wanderIndex];
-  const text = pos[direction] || (direction === 'up'
-    ? 'Nothing in particular overhead here.'
-    : 'Nothing at your feet here.');
-  speak(text);
+  const id = `w-${pos.id}-${direction}`;
+  if (LINES[id]) speakLine(id);
+  else speakLine(direction === 'up' ? 'w-nothing-up' : 'w-nothing-down');
 }
 
 function greetPerson() {
   const pos = wanderPositions[wanderIndex];
-  if (!pos.person) {
-    speak('Nobody here to greet just now.');
-    return;
-  }
+  if (!pos.person) { speakLine('w-nobody'); return; }
   if (pos.sound && sounds[pos.sound]) sounds[pos.sound]();
-  const greeting = pos.greetings[Math.floor(Math.random() * pos.greetings.length)];
-  speak(greeting);
+  const n = pos.greetCount || 3;
+  const i = Math.floor(Math.random() * n) + 1;
+  speakLine(`w-${pos.id}-greet-${i}`);
 }
 
 function exitWander() {
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  cancelCurrent();
   wanderMode = false;
   waitingForGesture = false;
   gestureHandler = null;
@@ -1034,7 +967,7 @@ function exitWander() {
 }
 
 // -------- Wire up --------
-function beginTutorial() {
+async function beginTutorial() {
   ensureAudio();
   preloadSounds();
   // iOS speech "warmup": needs a user-gesture-initiated utterance to unlock
@@ -1044,6 +977,8 @@ function beginTutorial() {
     speechSynthesis.speak(warm);
   }
   bindGestures();
+  await loadLines();
+  preloadLines();
   startChapter();
 }
 document.getElementById('startScreen').addEventListener('click', beginTutorial, { once: true });

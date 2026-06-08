@@ -628,17 +628,16 @@ function almostId(target)   {
 }
 
 // -------- Ambient interior audio --------
-// Per-clip target volume — the recordings differ in inherent loudness, so
-// each place gets its own level. Bakery is the reference (loudest the user is
-// happy with); others sit at ~half until tuned by ear.
-const ambientVolumes = {
-  'amb-bakery':    0.35,
-  'amb-bridie':    0.15,
-  'amb-post':      0.15,
-  'amb-school':    0.15,
-  'amb-chapel':    0.20,
-  'amb-catherine': 0.15,
-  'amb-pub':       0.15
+// Per-clip volume + loop. Some clips (the kettle) have a natural finite arc
+// — looping them feels wrong, so they play once and stop.
+const ambientConfig = {
+  'amb-bakery':    { volume: 0.35, loop: true  },
+  'amb-bridie':    { volume: 0.15, loop: false },
+  'amb-post':      { volume: 0.15, loop: true  },
+  'amb-school':    { volume: 0.30, loop: true  },
+  'amb-chapel':    { volume: 0.20, loop: true  },
+  'amb-catherine': { volume: 0.15, loop: true  },
+  'amb-pub':       { volume: 0.30, loop: true  }
 };
 let ambientSource = null;
 let ambientGain = null;
@@ -646,17 +645,23 @@ function startAmbient(id) {
   stopAmbient();
   loadLineAudio(id).then(loaded => {
     if (!loaded || !audioBuffers[id] || !audioCtx) return;
+    const cfg = ambientConfig[id] || {};
     const src = audioCtx.createBufferSource();
     const gain = audioCtx.createGain();
     gain.gain.value = 0.0;
     src.buffer = audioBuffers[id];
-    src.loop = true;
+    src.loop = (cfg.loop !== false);
     src.connect(gain).connect(audioCtx.destination);
-    // Fade in so it doesn't punch on entry.
     const t = audioCtx.currentTime;
-    const target = (ambientVolumes[id] !== undefined) ? ambientVolumes[id] : 0.20;
+    const target = (cfg.volume !== undefined) ? cfg.volume : 0.20;
     gain.gain.linearRampToValueAtTime(target, t + 0.6);
     src.start();
+    src.onended = () => {
+      // For non-looping clips, clear the source reference once the clip ends
+      // so stopAmbient() on later exit doesn't try to stop something already
+      // stopped.
+      if (ambientSource === src) { ambientSource = null; ambientGain = null; }
+    };
     ambientSource = src;
     ambientGain = gain;
   });

@@ -614,12 +614,55 @@ function cueId(target, isLast) {
   return isLast ? `cue-once-more-${target}` : `cue-again-${target}`;
 }
 function repromptId(target) { return `reprompt-${target}`; }
-function almostId(target)   { return target === 'double-tap' ? 'almost-double-tap' : `almost-${target}`; }
+function almostId(target)   {
+  if (target === 'double-tap') return 'almost-double-tap';
+  return `almost-${target}`;
+}
+
+// -------- Ambient interior audio --------
+let ambientSource = null;
+let ambientGain = null;
+function startAmbient(id) {
+  stopAmbient();
+  loadLineAudio(id).then(loaded => {
+    if (!loaded || !audioBuffers[id] || !audioCtx) return;
+    const src = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.0;
+    src.buffer = audioBuffers[id];
+    src.loop = true;
+    src.connect(gain).connect(audioCtx.destination);
+    // Fade in so it doesn't punch on entry.
+    const t = audioCtx.currentTime;
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.6);
+    src.start();
+    ambientSource = src;
+    ambientGain = gain;
+  });
+}
+function stopAmbient() {
+  if (!ambientSource) return;
+  const src = ambientSource;
+  const gain = ambientGain;
+  ambientSource = null;
+  ambientGain = null;
+  if (audioCtx && gain) {
+    const t = audioCtx.currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.linearRampToValueAtTime(0.0, t + 0.4);
+    setTimeout(() => { try { src.stop(); } catch (e) {} }, 450);
+  } else {
+    try { src.stop(); } catch (e) {}
+  }
+}
 
 // -------- Gesture detection --------
 let touchStartX = 0, touchStartY = 0, touchStartT = 0;
 let touchInProgress = false;
 let lastTapTime = 0;
+let lastTwoFingerTapTime = 0;
+let twoFinger = null;   // { startX, startY, startT, lastX, lastY } while a two-finger gesture is live
 let gestureHandler = null;
 let waitingForGesture = false;
 
@@ -628,7 +671,18 @@ let waitingForGesture = false;
 // the first gesture of the new phase.
 function setWaiting(v) {
   waitingForGesture = v;
-  if (v) { touchInProgress = false; lastTapTime = 0; }
+  if (v) {
+    touchInProgress = false;
+    twoFinger = null;
+    lastTapTime = 0;
+    lastTwoFingerTapTime = 0;
+  }
+}
+
+function avgXY(touchList) {
+  let x = 0, y = 0;
+  for (const t of touchList) { x += t.clientX; y += t.clientY; }
+  return { x: x / touchList.length, y: y / touchList.length };
 }
 
 function bindGestures() {
@@ -637,18 +691,73 @@ function bindGestures() {
   // still register.
   document.addEventListener('touchstart', onTouchStart, { passive: false });
   document.addEventListener('touchend', onTouchEnd, { passive: false });
-  document.addEventListener('touchcancel', () => { touchInProgress = false; }, { passive: false });
-  document.addEventListener('touchmove', e => { if (waitingForGesture) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchcancel', () => { touchInProgress = false; twoFinger = null; }, { passive: false });
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
 }
 function onTouchStart(e) {
-  if (e.touches.length !== 1) { touchInProgress = false; return; }
-  const t = e.touches[0];
-  touchStartX = t.clientX;
-  touchStartY = t.clientY;
-  touchStartT = Date.now();
-  touchInProgress = true;
+  if (e.touches.length === 2) {
+    const c = avgXY(e.touches);
+    twoFinger = { startX: c.x, startY: c.y, startT: Date.now(), lastX: c.x, lastY: c.y };
+    touchInProgress = false;
+    return;
+  }
+  if (e.touches.length === 1 && !twoFinger) {
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartT = Date.now();
+    touchInProgress = true;
+    return;
+  }
+  // More than two fingers — abort everything in flight.
+  if (e.touches.length > 2) {
+    twoFinger = null;
+    touchInProgress = false;
+  }
+}
+function onTouchMove(e) {
+  if (twoFinger && e.touches.length >= 1) {
+    const c = avgXY(e.touches);
+    twoFinger.lastX = c.x;
+    twoFinger.lastY = c.y;
+  }
+  if (waitingForGesture) e.preventDefault();
 }
 function onTouchEnd(e) {
+  // Two-finger gesture resolves when all fingers leave the screen.
+  if (twoFinger && e.touches.length === 0) {
+    const tf = twoFinger;
+    twoFinger = null;
+    if (!waitingForGesture) return;
+
+    const dx = tf.lastX - tf.startX;
+    const dy = tf.lastY - tf.startY;
+    const dt = Date.now() - tf.startT;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < TAP_MAX_DISTANCE && dt < TAP_MAX_TIME) {
+      const now = Date.now();
+      if (lastTwoFingerTapTime && now - lastTwoFingerTapTime < DOUBLE_TAP_WINDOW) {
+        lastTwoFingerTapTime = 0;
+        fireGesture('two-finger-double-tap');
+      } else {
+        const thisTap = now;
+        lastTwoFingerTapTime = thisTap;
+        setTimeout(() => { if (lastTwoFingerTapTime === thisTap) lastTwoFingerTapTime = 0; }, DOUBLE_TAP_WINDOW + 50);
+      }
+      return;
+    }
+    if (dist >= SWIPE_MIN_DISTANCE && Math.abs(dy) > Math.abs(dx)) {
+      fireGesture(dy > 0 ? 'two-finger-swipe-down' : 'two-finger-swipe-up');
+    }
+    return;
+  }
+
+  // If a two-finger gesture is mid-lift (one finger up, one still down),
+  // just wait for the rest of the fingers.
+  if (twoFinger) return;
+
+  // Single-finger end (existing logic)
   if (!waitingForGesture) { touchInProgress = false; return; }
   if (!touchInProgress) return;
   touchInProgress = false;
@@ -695,7 +804,10 @@ const gestureName = {
   'swipe-left':  'Swipe left',
   'swipe-up':    'Swipe up',
   'swipe-down':  'Swipe down',
-  'double-tap':  'Double tap'
+  'double-tap':  'Double tap',
+  'two-finger-double-tap': 'Two-finger tap',
+  'two-finger-swipe-up':   'Two fingers up',
+  'two-finger-swipe-down': 'Two fingers down'
 };
 let streak = 0;
 let scrapbook = [];
@@ -812,6 +924,21 @@ function scene6() {
   scrapbookAdd('Found a sea-smoothed stone on the path.');
   practiceGesture('double-tap', 't-scene6-intro',
     ['t-scene6-vignette-1', 't-scene6-vignette-2', 't-scene6-vignette-3'],
+    sceneInside);
+}
+function sceneInside() {
+  practiceGesture('two-finger-double-tap', 't-inside-intro',
+    ['t-inside-vignette-1', 't-inside-vignette-2', 't-inside-vignette-3'],
+    scenePickup);
+}
+function scenePickup() {
+  practiceGesture('two-finger-swipe-down', 't-pickup-intro',
+    ['t-pickup-vignette-1', 't-pickup-vignette-2', 't-pickup-vignette-3'],
+    sceneReach);
+}
+function sceneReach() {
+  practiceGesture('two-finger-swipe-up', 't-reach-intro',
+    ['t-reach-vignette-1', 't-reach-vignette-2', 't-reach-vignette-3'],
     scene7);
 }
 function scene7() {
@@ -841,9 +968,9 @@ function setupMiniScene() {
               sounds.bark();
               setTimeout(() => sounds.bark(), 350);
               setTimeout(() => {
-                speakLine('t-mini-bark-cue',
-                  () => startReprompt('t-mini-reprompt-greet'));
-                setInstruction('Find Pat\'s dog', 'Double tap to greet');
+                speakLine('t-mini-bark-cue-v2',
+                  () => startReprompt('t-mini-reprompt-pickup-dog'));
+                setInstruction('Find Pat\'s dog', 'Two fingers, swipe down to pick him up');
               }, 850);
             }, 300);
           });
@@ -858,7 +985,7 @@ function setupMiniScene() {
           () => startReprompt('t-mini-reprompt-walk'));
       }
     } else {
-      if (g === 'double-tap') {
+      if (g === 'two-finger-swipe-down') {
         streak++;
         updateBar();
         flashSuccess();
@@ -869,8 +996,8 @@ function setupMiniScene() {
         setTimeout(chapterComplete, 1300);
       } else {
         sounds.almost();
-        speakLine('t-mini-almost-greet',
-          () => startReprompt('t-mini-reprompt-greet'));
+        speakLine('t-mini-almost-greet-v2',
+          () => startReprompt('t-mini-reprompt-pickup-dog'));
       }
     }
   };
@@ -891,17 +1018,95 @@ let wanderIndex = 0;
 
 const wanderPositions = [
   { id: 'harbour' },
-  { id: 'bakery' },
-  { id: 'bridie', person: 'Bridie McGregor', greetCount: 3 },
-  { id: 'post', person: 'Patrick O\'Donovan', greetCount: 3 },
-  { id: 'school', person: 'Mr Breen', greetCount: 3 },
+  { id: 'bakery', door: true },
+  { id: 'bridie', door: true, person: 'Bridie McGregor', greetCount: 3 },
+  { id: 'post', door: true, person: 'Patrick O\'Donovan', greetCount: 3 },
+  { id: 'school', door: true, person: 'Mr Breen', greetCount: 3 },
   { id: 'brian', person: 'Brian Blunt', greetCount: 3 },
-  { id: 'chapel', person: 'Mary Mooney', greetCount: 3 },
-  { id: 'catherine', person: 'Catherine O\'Reilly', greetCount: 3 },
+  { id: 'chapel', door: true, person: 'Mary Mooney', greetCount: 3 },
+  { id: 'catherine', door: true, person: 'Catherine O\'Reilly', greetCount: 3 },
   { id: 'doctor', person: 'Dr O\'Loughlin', greetCount: 3 },
-  { id: 'pub', person: 'Barney', greetCount: 3 },
+  { id: 'pub', door: true, person: 'Barney', greetCount: 3 },
   { id: 'james', person: 'James', greetCount: 3, sound: 'bark' }
 ];
+
+// Interior state when inside a place.
+let insideId = null;
+let insideState = 'door';
+const pickedUp = {};
+
+function instructionFooter() {
+  if (insideId) return 'Walk · look · greet · two-finger tap to leave';
+  return 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet';
+}
+
+function pickupHere() {
+  let id;
+  if (insideId) id = `w-${insideId}-${insideState}-pickup`;
+  else id = `w-${wanderPositions[wanderIndex].id}-pickup`;
+  if (!LINES[id]) { speakLine('w-nothing-to-take'); return; }
+  if (pickedUp[id]) { speakLine('already-taken'); return; }
+  pickedUp[id] = true;
+  flashSuccess();
+  speakLine(id);
+}
+function reachHere() {
+  let id;
+  if (insideId) id = `w-${insideId}-${insideState}-reach`;
+  else id = `w-${wanderPositions[wanderIndex].id}-reach`;
+  if (!LINES[id]) { speakLine('w-nothing-to-reach'); return; }
+  if (pickedUp[id]) { speakLine('already-taken'); return; }
+  pickedUp[id] = true;
+  flashSuccess();
+  speakLine(id);
+}
+function enterInterior() {
+  const pos = wanderPositions[wanderIndex];
+  if (!pos.door) { speakLine('w-no-door'); return; }
+  insideId = pos.id;
+  insideState = 'door';
+  flashSuccess();
+  startAmbient(`amb-${insideId}`);
+  const id = `w-${insideId}-door-desc`;
+  setInstruction(LINES[id] || '', instructionFooter());
+  speakLine(id);
+}
+function exitInterior() {
+  insideId = null;
+  insideState = 'door';
+  flashSuccess();
+  stopAmbient();
+  const pos = wanderPositions[wanderIndex];
+  const id = `w-${pos.id}-desc`;
+  setInstruction(LINES[id] || '', instructionFooter());
+}
+function moveInside(delta) {
+  if (delta > 0 && insideState === 'door') {
+    insideState = 'deep';
+    flashSuccess();
+    sounds.step();
+    const id = `w-${insideId}-deep-desc`;
+    setInstruction(LINES[id] || '', instructionFooter());
+    speakLine(id);
+  } else if (delta < 0 && insideState === 'deep') {
+    insideState = 'door';
+    flashSuccess();
+    sounds.step();
+    const id = `w-${insideId}-door-desc`;
+    setInstruction(LINES[id] || '', instructionFooter());
+    speakLine(id);
+  }
+}
+function lookInside(direction) {
+  const id = `w-${insideId}-${insideState}-${direction}`;
+  if (LINES[id]) speakLine(id);
+  else speakLine(direction === 'up' ? 'w-nothing-up' : 'w-nothing-down');
+}
+function greetInside() {
+  const id = `w-${insideId}-${insideState}-greet`;
+  if (LINES[id]) speakLine(id);
+  else speakLine('w-nobody');
+}
 
 function enterWander(skipIntro = false) {
   document.body.classList.remove('complete');
@@ -913,10 +1118,13 @@ function enterWander(skipIntro = false) {
   wanderMode = true;
   wanderIndex = 0;
   lastTapTime = 0;
+  insideId = null;
+  insideState = 'door';
+  for (const k of Object.keys(pickedUp)) delete pickedUp[k];
 
   ensureAudio();
   const firstId = `w-${wanderPositions[0].id}-desc`;
-  setInstruction(LINES[firstId] || '', 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet');
+  setInstruction(LINES[firstId] || '', instructionFooter());
 
   gestureHandler = handleWanderGesture;
 
@@ -930,12 +1138,25 @@ function enterWander(skipIntro = false) {
 }
 
 function handleWanderGesture(g) {
-  if (g === 'swipe-right') moveWander(+1);
-  else if (g === 'swipe-left') moveWander(-1);
-  else if (g === 'swipe-up') lookAt('up');
-  else if (g === 'swipe-down') lookAt('down');
-  else if (g === 'double-tap') greetPerson();
-  // single taps: ignored
+  if (insideId) {
+    if (g === 'two-finger-double-tap') { exitInterior(); return; }
+    if (g === 'two-finger-swipe-down')  { pickupHere(); return; }
+    if (g === 'two-finger-swipe-up')    { reachHere(); return; }
+    if (g === 'swipe-right')            { moveInside(+1); return; }
+    if (g === 'swipe-left')             { moveInside(-1); return; }
+    if (g === 'swipe-up')               { lookInside('up'); return; }
+    if (g === 'swipe-down')             { lookInside('down'); return; }
+    if (g === 'double-tap')             { greetInside(); return; }
+    return;
+  }
+  if (g === 'two-finger-double-tap') { enterInterior(); return; }
+  if (g === 'two-finger-swipe-down')  { pickupHere(); return; }
+  if (g === 'two-finger-swipe-up')    { reachHere(); return; }
+  if (g === 'swipe-right')            { moveWander(+1); return; }
+  if (g === 'swipe-left')             { moveWander(-1); return; }
+  if (g === 'swipe-up')               { lookAt('up'); return; }
+  if (g === 'swipe-down')             { lookAt('down'); return; }
+  if (g === 'double-tap')             { greetPerson(); return; }
 }
 
 function moveWander(delta) {
@@ -947,7 +1168,7 @@ function moveWander(delta) {
   flashSuccess();
   const pos = wanderPositions[wanderIndex];
   const descId = `w-${pos.id}-desc`;
-  setInstruction(LINES[descId] || '', 'Swipe left or right to walk · Swipe up or down to look · Double tap to greet');
+  setInstruction(LINES[descId] || '', instructionFooter());
   if (pos.sound && sounds[pos.sound]) sounds[pos.sound]();
   speakLine(descId);
 }
@@ -970,6 +1191,9 @@ function greetPerson() {
 
 function exitWander() {
   cancelCurrent();
+  stopAmbient();
+  insideId = null;
+  insideState = 'door';
   wanderMode = false;
   setWaiting(false);
   gestureHandler = null;

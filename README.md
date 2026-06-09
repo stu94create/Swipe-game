@@ -1,3 +1,3 @@
 # Swipe-game
 
-Copyright © 2026 Stuart Haxwell. All Rights Reserved. See [LICENSE](LICENSE).
+Copyright © 2026 Stuart Haxell. All Rights Reserved. See [LICENSE](LICENSE).

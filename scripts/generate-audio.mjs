@@ -25,6 +25,9 @@ const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const force = args.has('--force');
 const onlyArg = [...args].find(a => a.startsWith('--only='));
+// String *prefix* match — --only=t-mini matches all t-mini-* lines, --only=w-
+// matches every wander line, --only=w-bridie matches that position's lines.
+// Pair with --force when re-rendering an existing file.
 const onlyPrefix = onlyArg ? onlyArg.slice('--only='.length) : null;
 
 if (!dryRun && !API_KEY) {

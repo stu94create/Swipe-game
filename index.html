@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1f4e5a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; media-src 'self' data:; script-src 'self' 'unsafe-inline'; connect-src 'self'">
 <title>Ballycrann</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -544,8 +545,8 @@ function loadLineAudio(id) {
   return linePromises[id];
 }
 
-function preloadLines() {
-  Object.keys(LINES).forEach(id => { loadLineAudio(id); });
+function preloadAhead(ids) {
+  for (const id of ids) loadLineAudio(id);
 }
 
 function cancelCurrent() {
@@ -874,6 +875,12 @@ function startReprompt(promptId) {
 
 function practiceGesture(target, introId, vignetteIds, onDone) {
   clearReprompt();
+  // Prefetch every line this scene might say so playback is gapless.
+  preloadAhead([
+    introId, ...vignetteIds,
+    cueId(target, true), cueId(target, false),
+    repromptId(target), almostId(target)
+  ]);
   const reps = vignetteIds.length;
   let count = 0;
   setWaiting(true);
@@ -974,6 +981,12 @@ function scene7() {
 }
 
 function setupMiniScene() {
+  preloadAhead([
+    't-scene7-intro', 't-mini-stage1', 't-mini-stage2',
+    't-mini-bark-cue-v2', 't-mini-almost-swipe', 't-mini-almost-greet-v2',
+    't-mini-reprompt-walk', 't-mini-reprompt-pickup-dog',
+    'cue-again-swipe-right', 't-complete-v2'
+  ]);
   let stage = 0;
   setWaiting(true);
   setInstruction('Find Pat\'s dog', 'Swipe right twice');
@@ -1033,6 +1046,13 @@ function chapterComplete() {
   setWaiting(false);
   gestureHandler = null;
   clearReprompt();
+  // Warm the wander intro + harbour content while the completion speech plays.
+  preloadAhead([
+    'w-intro-v2', 'w-edge-west', 'w-edge-east', 'w-nobody',
+    'w-nothing-up', 'w-nothing-down', 'w-nothing-to-take', 'w-nothing-to-reach',
+    'w-no-door', 'already-taken',
+    'w-harbour-desc', 'w-harbour-up', 'w-harbour-down', 'w-harbour-pickup'
+  ]);
   speakLine('t-complete-v2', () => enterWander(true));
 }
 
@@ -1197,6 +1217,22 @@ function moveWander(delta) {
   const pos = wanderPositions[wanderIndex];
   const descId = `w-${pos.id}-desc`;
   setInstruction(LINES[descId] || '', instructionFooter());
+  // Prefetch everything the player can do from this position.
+  preloadAhead([
+    descId, `w-${pos.id}-up`, `w-${pos.id}-down`,
+    `w-${pos.id}-pickup`, `w-${pos.id}-reach`
+  ]);
+  if (pos.greetCount) {
+    for (let i = 1; i <= pos.greetCount; i++) loadLineAudio(`w-${pos.id}-greet-${i}`);
+  }
+  if (pos.door) {
+    loadLineAudio(`amb-${pos.id}`);
+    for (const state of ['door', 'deep']) {
+      for (const k of ['desc','up','down','greet','pickup','reach']) {
+        loadLineAudio(`w-${pos.id}-${state}-${k}`);
+      }
+    }
+  }
   if (pos.sound && sounds[pos.sound]) sounds[pos.sound]();
   speakLine(descId);
 }
@@ -1246,7 +1282,15 @@ async function beginTutorial() {
   }
   bindGestures();
   await loadLines();
-  preloadLines();
+  // Only warm the first scene's lines so the user hears Mary instantly on a
+  // cold load. Every subsequent scene + wander step prefetches its own lines
+  // when entered — see practiceGesture, moveWander, enterInterior.
+  preloadAhead([
+    't-scene1-intro',
+    't-scene1-vignette-1', 't-scene1-vignette-2', 't-scene1-vignette-3',
+    'cue-once-more-swipe-right', 'cue-again-swipe-right',
+    'reprompt-swipe-right', 'almost-swipe-right'
+  ]);
   startChapter();
 }
 document.getElementById('startScreen').addEventListener('click', beginTutorial, { once: true });

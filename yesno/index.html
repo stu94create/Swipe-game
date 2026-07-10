@@ -305,20 +305,23 @@
 
 <script>
 /* ============================ Question deck ============================ */
+// `text` shows on the card; `say` is what the voice reads aloud.
 const DECK = [
-  { id: 'yn-q1',  text: 'Do you love Dolly Parton?' },
-  { id: 'yn-q2',  text: 'Is Friday night made for two-steppin’?' },
-  { id: 'yn-q3',  text: 'Would you rather ride a horse than drive a truck?' },
-  { id: 'yn-q4',  text: 'Are cowboy boots the best boots?' },
-  { id: 'yn-q5',  text: 'Does a slow country ballad beat a pop song?' },
-  { id: 'yn-q6',  text: 'Is sweet tea better than soda?' },
-  { id: 'yn-q7',  text: 'Would you dance in the kitchen right now?' },
-  { id: 'yn-q8',  text: 'Is a front porch the finest seat in the house?' },
-  { id: 'yn-q9',  text: 'Know all the words to a Johnny Cash tune?' },
-  { id: 'yn-q10', text: 'Last one — are you havin’ a good time?' },
+  { text: 'Do you love Dolly Parton?',                 say: 'Do you love Dolly Parton?' },
+  { text: 'Is Friday night made for two-steppin’?',    say: 'Is Friday night made for two steppin?' },
+  { text: 'Would you rather ride a horse than drive a truck?', say: 'Would you rather ride a horse than drive a truck?' },
+  { text: 'Are cowboy boots the best boots?',          say: 'Are cowboy boots the best boots?' },
+  { text: 'Does a slow country ballad beat a pop song?', say: 'Does a slow country ballad beat a pop song every time?' },
+  { text: 'Is sweet tea better than soda?',            say: 'Is sweet tea better than soda?' },
+  { text: 'Would you dance in the kitchen right now?', say: 'Would you dance in the kitchen if your song came on right now?' },
+  { text: 'Is a front porch the finest seat in the house?', say: 'Is a front porch the finest seat in the house?' },
+  { text: 'Know all the words to a Johnny Cash tune?', say: 'Do you know all the words to at least one Johnny Cash tune?' },
+  { text: 'Last one — are you havin’ a good time?',    say: 'Last one now. Are you havin a good time?' },
 ];
-const YES_LINES = ['yn-yes-1', 'yn-yes-2', 'yn-yes-3'];
-const NO_LINES  = ['yn-no-1', 'yn-no-2', 'yn-no-3'];
+const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
+const COMPLETE_LINE = "And that's the whole hoedown. You did just fine. Tap the button there to play it all again.";
+const YES_LINES = ['Yee-haw! I knew it.', 'Well alright! That\'s a yes.', 'Now we\'re talkin.'];
+const NO_LINES  = ['Aw, alright then. A no it is.', 'Ha! Fair enough, darlin.', 'No? Well, more for me.'];
 
 /* ============================ Gesture tunables ============================ */
 const SWIPE_MIN_DISTANCE = 34;   // px — needs a real swipe, not a tap
@@ -352,22 +355,7 @@ const chimes = {
   done() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.5, 'triangle', 0.16, i * 0.12)); },
 };
 
-const audioBuffers = {};
-async function loadSound(name, src) {
-  try {
-    ensureAudio();
-    const response = await fetch(src);
-    if (!response.ok) return false;
-    const arrayBuffer = await response.arrayBuffer();
-    audioBuffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
-    return true;
-  } catch (e) { return false; }
-}
-
-/* ------- Voice: pre-rendered ElevenLabs MP3s, speechSynthesis fallback ------- */
-const LINES = {};
-const linePromises = {};
-let currentLineSource = null;
+/* ------- Voice: the browser's built-in speech (no external audio) ------- */
 let speechGen = 0;
 let preferredVoice = null;
 
@@ -386,19 +374,6 @@ if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
 }
-
-async function loadLines() {
-  try {
-    const res = await fetch('audio/lines.json');
-    if (res.ok) Object.assign(LINES, await res.json());
-  } catch (e) {}
-}
-function loadLineAudio(id) {
-  if (audioBuffers[id]) return Promise.resolve(true);
-  if (linePromises[id]) return linePromises[id];
-  linePromises[id] = loadSound(id, `audio/${id}.mp3`);
-  return linePromises[id];
-}
 function setSpeaking(on) {
   const ind = document.getElementById('speakingIndicator');
   if (ind) ind.classList.toggle('active', on);
@@ -406,48 +381,22 @@ function setSpeaking(on) {
 }
 function cancelCurrent() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
-  if (currentLineSource) {
-    currentLineSource._cancelled = true;
-    try { currentLineSource.stop(); } catch (e) {}
-    currentLineSource = null;
-  }
   setSpeaking(false);
 }
-function playLineBuffer(id, onEnd) {
-  if (!audioBuffers[id] || !audioCtx) return false;
-  const src = audioCtx.createBufferSource();
-  src.buffer = audioBuffers[id];
-  src.connect(audioCtx.destination);
-  setSpeaking(true);
-  src.onended = () => {
-    setSpeaking(false);
-    if (currentLineSource === src) currentLineSource = null;
-    if (!src._cancelled && onEnd) onEnd();
-  };
-  try { src.start(); } catch (e) { return false; }
-  currentLineSource = src;
-  return true;
-}
-function speakFallback(text, onEnd) {
-  if (!('speechSynthesis' in window) || !text) { if (onEnd) setTimeout(onEnd, 1200); return; }
+// Speak a line of text, then call onEnd. Guarded by speechGen so a new line
+// cancels a stale one's callback.
+function speakLine(text, onEnd) {
+  const myGen = ++speechGen;
+  cancelCurrent();
+  const done = () => { if (myGen === speechGen) { setSpeaking(false); if (onEnd) onEnd(); } };
+  if (!('speechSynthesis' in window) || !text) { setTimeout(done, 1200); return; }
   const u = new SpeechSynthesisUtterance(text);
   if (preferredVoice) u.voice = preferredVoice;
   u.rate = 0.98; u.pitch = 1.0; u.volume = 1.0;
-  u.onstart = () => setSpeaking(true);
-  u.onend   = () => { setSpeaking(false); if (onEnd) onEnd(); };
-  u.onerror = () => { setSpeaking(false); if (onEnd) onEnd(); };
+  u.onstart = () => { if (myGen === speechGen) setSpeaking(true); };
+  u.onend   = done;
+  u.onerror = done;
   speechSynthesis.speak(u);
-}
-async function speakLine(id, onEnd) {
-  const myGen = ++speechGen;
-  cancelCurrent();
-  const loaded = await loadLineAudio(id);
-  if (myGen !== speechGen) return;
-  if (loaded && audioBuffers[id]) {
-    playLineBuffer(id, () => { if (myGen === speechGen && onEnd) onEnd(); });
-    return;
-  }
-  speakFallback(LINES[id], () => { if (myGen === speechGen && onEnd) onEnd(); });
 }
 
 /* ============================ Background music ============================ */
@@ -530,8 +479,8 @@ function showQuestion() {
   card.className = 'card';
   transitioning = false;
   acceptingInput = false;   // no answers until the question has been read
-  speakLine(q.id, () => { acceptingInput = true; });
-  // Safety: if speech never fires (e.g. no audio at all), open input anyway.
+  speakLine(q.say, () => { acceptingInput = true; });
+  // Safety: if speech never fires (e.g. muted device), open input anyway.
   setTimeout(() => { acceptingInput = true; }, 2600);
 }
 
@@ -555,9 +504,9 @@ function answer(kind) {
   chimes[kind]();
 
   // Rotating spoken reaction, then advance.
-  let reactId;
-  if (kind === 'yes') { reactId = YES_LINES[yesCursor % YES_LINES.length]; yesCursor++; }
-  else                { reactId = NO_LINES[noCursor % NO_LINES.length]; noCursor++; }
+  let reaction;
+  if (kind === 'yes') { reaction = YES_LINES[yesCursor % YES_LINES.length]; yesCursor++; }
+  else                { reaction = NO_LINES[noCursor % NO_LINES.length]; noCursor++; }
 
   let advanced = false;
   const go = () => {
@@ -567,7 +516,7 @@ function answer(kind) {
     if (index >= DECK.length) finish();
     else showQuestion();
   };
-  speakLine(reactId, go);
+  speakLine(reaction, go);
   setTimeout(go, 2200);   // fallback pacing so we never stall
 }
 
@@ -577,7 +526,7 @@ function finish() {
     `You said <b>YES</b> to ${yes} of ${DECK.length}.`;
   document.body.classList.remove('in-game');
   document.body.classList.add('complete');
-  speakLine('yn-complete');
+  speakLine(COMPLETE_LINE);
 }
 
 function startGame() {
@@ -588,9 +537,9 @@ function startGame() {
   document.body.classList.add('in-game');
   buildProgress();
   // Read the intro, then the first question.
-  speakLine('yn-intro', () => showQuestion());
-  // Fallback: if intro audio is totally absent, still start.
-  setTimeout(() => { if (!document.getElementById('questionText').textContent.trim() || document.getElementById('questionText').textContent === '…') showQuestion(); }, 4000);
+  speakLine(INTRO_LINE, () => showQuestion());
+  // Fallback: if speech never starts (muted device), still begin.
+  setTimeout(() => { const t = document.getElementById('questionText').textContent; if (!t.trim() || t === '…') showQuestion(); }, 7000);
 }
 
 /* ============================ Input ============================ */
@@ -632,9 +581,6 @@ document.getElementById('choiceNo').addEventListener('click', () => answer('no')
 /* ============================ Boot ============================ */
 document.getElementById('beginBtn').addEventListener('click', () => {
   ensureAudio();
-  loadLines();
-  // Preload the intro + first couple questions.
-  ['yn-intro', 'yn-q1', 'yn-q2'].forEach(loadLineAudio);
   startMusic();
   startGame();
 });

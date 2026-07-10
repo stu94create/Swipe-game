@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src 'self' data:; connect-src 'self'; img-src 'self' data:;" />
+<meta name="theme-color" content="#8a3b2e" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Country Yes or No</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --wheat:        #f6e7c9;   /* warm cream background */
+    --wheat-light:  #fbf3e0;
+    --dusk:         #3a2233;   /* deep plum for text on light */
+    --barn:         #8a3b2e;   /* barn red */
+    --barn-deep:    #6e2c22;
+    --sunset:       #e07a3c;   /* sunset orange */
+    --sunset-soft:  #f0a763;
+    --denim:        #2f5d73;   /* denim blue */
+    --denim-deep:   #22475a;
+    --gold:         #d9a544;
+    --cream-ink:    #4a3a24;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    color: var(--dusk);
+    background:
+      radial-gradient(120% 80% at 50% -10%, var(--sunset-soft) 0%, rgba(240,167,99,0) 55%),
+      radial-gradient(120% 90% at 50% 120%, rgba(47,93,115,0.35) 0%, rgba(47,93,115,0) 60%),
+      var(--wheat);
+    min-height: 100dvh;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  h1, h2, .q-text, .tally { font-family: 'Fraunces', Georgia, serif; }
+
+  .screen {
+    position: fixed; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 28px 24px calc(28px + env(safe-area-inset-bottom));
+  }
+  body:not(.in-game):not(.complete) #startScreen { display: flex; }
+  body.in-game #gameScreen { display: flex; }
+  body.complete #completeScreen { display: flex; }
+
+  /* ---------- Start screen ---------- */
+  .kicker {
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--barn);
+    margin-bottom: 12px;
+  }
+  #startScreen h1 {
+    font-size: clamp(2.6rem, 12vw, 4.4rem);
+    line-height: 0.98;
+    margin: 0 0 8px;
+    font-weight: 700;
+    color: var(--dusk);
+    font-variation-settings: 'opsz' 120;
+  }
+  #startScreen h1 .amp { color: var(--sunset); font-style: italic; }
+  .subtitle {
+    font-size: 1.06rem;
+    max-width: 22rem;
+    color: var(--cream-ink);
+    margin: 6px 0 30px;
+    line-height: 1.4;
+  }
+  .btn {
+    font-family: 'Atkinson Hyperlegible', sans-serif;
+    font-weight: 700;
+    font-size: 1.12rem;
+    border: none;
+    border-radius: 999px;
+    padding: 16px 44px;
+    color: var(--wheat-light);
+    background: var(--barn);
+    box-shadow: 0 6px 0 var(--barn-deep), 0 12px 24px rgba(110,44,34,0.35);
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 var(--barn-deep), 0 6px 14px rgba(110,44,34,0.35);
+  }
+  .btn.ghost {
+    background: var(--denim);
+    box-shadow: 0 6px 0 var(--denim-deep), 0 12px 24px rgba(34,71,90,0.35);
+  }
+  .btn.ghost:active { box-shadow: 0 2px 0 var(--denim-deep), 0 6px 14px rgba(34,71,90,0.35); }
+  .rule { font-size: 0.95rem; color: var(--cream-ink); margin-top: 22px; opacity: 0.85; }
+  .rule b { color: var(--barn); }
+
+  /* ---------- Game screen ---------- */
+  #gameScreen { justify-content: space-between; }
+  .topbar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .progress { display: flex; gap: 7px; flex-wrap: wrap; max-width: 70%; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: rgba(74,58,36,0.22);
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+  .dot.done { background: var(--sunset); }
+  .dot.current { background: var(--barn); transform: scale(1.35); }
+
+  .icon-btn {
+    flex: 0 0 auto;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: 2px solid rgba(138,59,46,0.4);
+    background: rgba(251,243,224,0.7);
+    color: var(--barn);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:active { transform: scale(0.92); }
+
+  .stage {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .card {
+    width: min(88vw, 30rem);
+    min-height: 44vh;
+    background: linear-gradient(180deg, var(--wheat-light), #f3e6c6);
+    border: 2px solid rgba(138,59,46,0.28);
+    border-radius: 26px;
+    box-shadow: 0 18px 40px rgba(58,34,51,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 26px;
+    transition: transform 0.28s cubic-bezier(.34,1.2,.5,1), opacity 0.28s ease;
+  }
+  .card.leaving-yes { transform: translateX(-130%) rotate(-14deg); opacity: 0; }
+  .card.leaving-no  { transform: translateX(130%) rotate(14deg); opacity: 0; }
+  .card.entering { transform: translateY(16px) scale(0.96); opacity: 0; }
+  .q-text {
+    font-size: clamp(1.6rem, 6.4vw, 2.5rem);
+    font-weight: 600;
+    line-height: 1.18;
+    color: var(--dusk);
+  }
+
+  .choices {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 30rem;
+  }
+  .choice {
+    flex: 1;
+    border-radius: 18px;
+    padding: 14px 10px;
+    font-weight: 700;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.08s ease;
+  }
+  .choice:active { transform: translateY(3px) scale(0.98); }
+  .choice .big { font-family: 'Fraunces', serif; font-size: 1.5rem; }
+  .choice .dir { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.8; }
+  .choice.yes { background: rgba(217,165,68,0.18); color: var(--barn); border-color: rgba(217,165,68,0.5); }
+  .choice.no  { background: rgba(47,93,115,0.14); color: var(--denim-deep); border-color: rgba(47,93,115,0.4); }
+  .swipe-hint {
+    font-size: 0.9rem;
+    color: var(--cream-ink);
+    opacity: 0.85;
+    margin-top: 4px;
+    min-height: 1.2em;
+  }
+
+  .speaking {
+    display: inline-flex; gap: 4px; align-items: flex-end; height: 14px;
+    opacity: 0; transition: opacity 0.2s ease;
+  }
+  .speaking.active { opacity: 1; }
+  .speaking span {
+    width: 3px; background: var(--barn); border-radius: 2px; height: 5px;
+    animation: bar 0.7s ease-in-out infinite;
+  }
+  .speaking span:nth-child(2) { animation-delay: 0.14s; }
+  .speaking span:nth-child(3) { animation-delay: 0.28s; }
+  .speaking span:nth-child(4) { animation-delay: 0.42s; }
+  @keyframes bar { 0%,100% { height: 4px; } 50% { height: 14px; } }
+
+  /* answer flash overlay */
+  .verdict {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    font-family: 'Fraunces', serif;
+    font-size: clamp(3rem, 18vw, 7rem);
+    font-weight: 700;
+    opacity: 0;
+  }
+  .verdict.show { animation: pop 0.7s ease forwards; }
+  .verdict.yes { color: var(--sunset); }
+  .verdict.no  { color: var(--denim); }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(0.6); }
+    25% { opacity: 1; transform: scale(1.05); }
+    70% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.1); }
+  }
+
+  /* ---------- Complete screen ---------- */
+  #completeScreen h2 {
+    font-size: clamp(2rem, 9vw, 3rem);
+    margin: 0 0 10px;
+    color: var(--dusk);
+  }
+  .tally {
+    font-size: clamp(1.15rem, 5vw, 1.6rem);
+    color: var(--barn);
+    margin: 4px 0 28px;
+    line-height: 1.4;
+  }
+  .tally b { color: var(--sunset); }
+</style>
+</head>
+<body>
+
+  <!-- Looping country instrumental. Drop a Suno-made MP3 at yesno/audio/country-track.mp3. -->
+  <audio id="music" src="audio/country-track.mp3" loop preload="auto"></audio>
+
+  <!-- Start -->
+  <section class="screen" id="startScreen">
+    <div class="kicker">A little country game</div>
+    <h1>Yes <span class="amp">or</span> No</h1>
+    <p class="subtitle">A voice asks, you swipe. Turn your sound on and get comfy on the porch.</p>
+    <button class="btn" id="beginBtn">Let's Go</button>
+    <p class="rule">Swipe <b>left for YES</b> &nbsp;·&nbsp; <b>right for NO</b></p>
+  </section>
+
+  <!-- Game -->
+  <section class="screen" id="gameScreen">
+    <div class="topbar">
+      <div class="progress" id="progress"></div>
+      <div class="speaking" id="speakingIndicator"><span></span><span></span><span></span><span></span></div>
+      <button class="icon-btn" id="muteBtn" aria-label="Toggle music">♪</button>
+    </div>
+
+    <div class="stage">
+      <div class="card entering" id="card">
+        <div class="q-text" id="questionText">…</div>
+      </div>
+    </div>
+
+    <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap:10px;">
+      <div class="choices">
+        <div class="choice yes" id="choiceYes"><span class="big">Yes</span><span class="dir">← swipe left</span></div>
+        <div class="choice no" id="choiceNo"><span class="big">No</span><span class="dir">swipe right →</span></div>
+      </div>
+      <div class="swipe-hint" id="hint">Swipe the card to answer</div>
+    </div>
+  </section>
+
+  <!-- Complete -->
+  <section class="screen" id="completeScreen">
+    <div class="kicker">That's a wrap</div>
+    <h2>Well done, darlin'</h2>
+    <p class="tally" id="tally"></p>
+    <button class="btn ghost" id="againBtn">Play Again</button>
+  </section>
+
+  <div class="verdict" id="verdict"></div>
+
+<script>
+/* ============================ Question deck ============================ */
+const DECK = [
+  { id: 'yn-q1',  text: 'Do you love Dolly Parton?' },
+  { id: 'yn-q2',  text: 'Is Friday night made for two-steppin’?' },
+  { id: 'yn-q3',  text: 'Would you rather ride a horse than drive a truck?' },
+  { id: 'yn-q4',  text: 'Are cowboy boots the best boots?' },
+  { id: 'yn-q5',  text: 'Does a slow country ballad beat a pop song?' },
+  { id: 'yn-q6',  text: 'Is sweet tea better than soda?' },
+  { id: 'yn-q7',  text: 'Would you dance in the kitchen right now?' },
+  { id: 'yn-q8',  text: 'Is a front porch the finest seat in the house?' },
+  { id: 'yn-q9',  text: 'Know all the words to a Johnny Cash tune?' },
+  { id: 'yn-q10', text: 'Last one — are you havin’ a good time?' },
+];
+const YES_LINES = ['yn-yes-1', 'yn-yes-2', 'yn-yes-3'];
+const NO_LINES  = ['yn-no-1', 'yn-no-2', 'yn-no-3'];
+
+/* ============================ Gesture tunables ============================ */
+const SWIPE_MIN_DISTANCE = 34;   // px — needs a real swipe, not a tap
+const TAP_MAX_DISTANCE = 10;
+const TAP_MAX_TIME = 450;
+
+/* ============================ Audio engine ============================ */
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, type = 'sine', vol = 0.15, when = 0) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + when;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+// Little country-ish plucks for each answer.
+const chimes = {
+  yes() { tone(587.33, 0.3, 'triangle', 0.2); tone(880, 0.4, 'triangle', 0.16, 0.09); },
+  no()  { tone(392, 0.32, 'triangle', 0.2); tone(311.13, 0.42, 'triangle', 0.16, 0.09); },
+  done() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.5, 'triangle', 0.16, i * 0.12)); },
+};
+
+const audioBuffers = {};
+async function loadSound(name, src) {
+  try {
+    ensureAudio();
+    const response = await fetch(src);
+    if (!response.ok) return false;
+    const arrayBuffer = await response.arrayBuffer();
+    audioBuffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ------- Voice: pre-rendered ElevenLabs MP3s, speechSynthesis fallback ------- */
+const LINES = {};
+const linePromises = {};
+let currentLineSource = null;
+let speechGen = 0;
+let preferredVoice = null;
+
+function loadVoices() {
+  if (!('speechSynthesis' in window)) return;
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return;
+  // Prefer a warm US English voice to fit the country theme.
+  preferredVoice =
+    voices.find(v => /en[-_]US/i.test(v.lang) && /Samantha|Ava|Allison|Nicky/i.test(v.name)) ||
+    voices.find(v => /en[-_]US/i.test(v.lang)) ||
+    voices.find(v => /^en/i.test(v.lang)) ||
+    voices[0];
+}
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged = loadVoices;
+  loadVoices();
+}
+
+async function loadLines() {
+  try {
+    const res = await fetch('audio/lines.json');
+    if (res.ok) Object.assign(LINES, await res.json());
+  } catch (e) {}
+}
+function loadLineAudio(id) {
+  if (audioBuffers[id]) return Promise.resolve(true);
+  if (linePromises[id]) return linePromises[id];
+  linePromises[id] = loadSound(id, `audio/${id}.mp3`);
+  return linePromises[id];
+}
+function setSpeaking(on) {
+  const ind = document.getElementById('speakingIndicator');
+  if (ind) ind.classList.toggle('active', on);
+  duckMusic(on);
+}
+function cancelCurrent() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (currentLineSource) {
+    currentLineSource._cancelled = true;
+    try { currentLineSource.stop(); } catch (e) {}
+    currentLineSource = null;
+  }
+  setSpeaking(false);
+}
+function playLineBuffer(id, onEnd) {
+  if (!audioBuffers[id] || !audioCtx) return false;
+  const src = audioCtx.createBufferSource();
+  src.buffer = audioBuffers[id];
+  src.connect(audioCtx.destination);
+  setSpeaking(true);
+  src.onended = () => {
+    setSpeaking(false);
+    if (currentLineSource === src) currentLineSource = null;
+    if (!src._cancelled && onEnd) onEnd();
+  };
+  try { src.start(); } catch (e) { return false; }
+  currentLineSource = src;
+  return true;
+}
+function speakFallback(text, onEnd) {
+  if (!('speechSynthesis' in window) || !text) { if (onEnd) setTimeout(onEnd, 1200); return; }
+  const u = new SpeechSynthesisUtterance(text);
+  if (preferredVoice) u.voice = preferredVoice;
+  u.rate = 0.98; u.pitch = 1.0; u.volume = 1.0;
+  u.onstart = () => setSpeaking(true);
+  u.onend   = () => { setSpeaking(false); if (onEnd) onEnd(); };
+  u.onerror = () => { setSpeaking(false); if (onEnd) onEnd(); };
+  speechSynthesis.speak(u);
+}
+async function speakLine(id, onEnd) {
+  const myGen = ++speechGen;
+  cancelCurrent();
+  const loaded = await loadLineAudio(id);
+  if (myGen !== speechGen) return;
+  if (loaded && audioBuffers[id]) {
+    playLineBuffer(id, () => { if (myGen === speechGen && onEnd) onEnd(); });
+    return;
+  }
+  speakFallback(LINES[id], () => { if (myGen === speechGen && onEnd) onEnd(); });
+}
+
+/* ============================ Background music ============================ */
+const music = document.getElementById('music');
+let musicWanted = true;      // user's mute preference
+let musicReady = false;
+music.volume = 0;
+music.addEventListener('canplay', () => { musicReady = true; });
+music.addEventListener('error', () => { musicReady = false; });
+
+function startMusic() {
+  if (!musicWanted) return;
+  const p = music.play();
+  if (p && p.catch) p.catch(() => {});   // absent file or blocked autoplay — game still works
+  fadeMusic(0.5, 900);
+}
+let fadeTimer = null;
+function fadeMusic(target, ms) {
+  if (fadeTimer) clearInterval(fadeTimer);
+  const start = music.volume;
+  const steps = Math.max(1, Math.round(ms / 40));
+  let i = 0;
+  fadeTimer = setInterval(() => {
+    i++;
+    music.volume = Math.min(1, Math.max(0, start + (target - start) * (i / steps)));
+    if (i >= steps) { clearInterval(fadeTimer); fadeTimer = null; }
+  }, 40);
+}
+// Duck the music under narration so the voice sits on top.
+function duckMusic(voiceOn) {
+  if (music.muted || !musicWanted) return;
+  fadeMusic(voiceOn ? 0.16 : 0.5, voiceOn ? 250 : 600);
+}
+document.getElementById('muteBtn').addEventListener('click', () => {
+  musicWanted = !musicWanted;
+  const btn = document.getElementById('muteBtn');
+  if (musicWanted) {
+    btn.textContent = '♪';
+    startMusic();
+  } else {
+    btn.textContent = '🔇';
+    fadeMusic(0, 300);
+    setTimeout(() => music.pause(), 320);
+  }
+});
+
+/* ============================ Game state ============================ */
+let index = 0;
+let answers = [];          // 'yes' | 'no'
+let acceptingInput = false;
+let transitioning = false;
+let yesCursor = 0, noCursor = 0;
+
+function buildProgress() {
+  const wrap = document.getElementById('progress');
+  wrap.innerHTML = '';
+  DECK.forEach(() => {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    wrap.appendChild(d);
+  });
+}
+function paintProgress() {
+  const dots = document.querySelectorAll('#progress .dot');
+  dots.forEach((d, i) => {
+    d.classList.toggle('done', i < index);
+    d.classList.toggle('current', i === index);
+  });
+}
+
+function showQuestion() {
+  const q = DECK[index];
+  const card = document.getElementById('card');
+  document.getElementById('questionText').textContent = q.text;
+  document.getElementById('hint').textContent = 'Swipe the card to answer';
+  paintProgress();
+  // enter animation
+  card.className = 'card entering';
+  void card.offsetWidth;
+  card.className = 'card';
+  transitioning = false;
+  acceptingInput = false;   // no answers until the question has been read
+  speakLine(q.id, () => { acceptingInput = true; });
+  // Safety: if speech never fires (e.g. no audio at all), open input anyway.
+  setTimeout(() => { acceptingInput = true; }, 2600);
+}
+
+function flashVerdict(kind) {
+  const v = document.getElementById('verdict');
+  v.textContent = kind === 'yes' ? 'YES' : 'NO';
+  v.className = 'verdict ' + kind;
+  void v.offsetWidth;
+  v.classList.add('show');
+}
+
+function answer(kind) {
+  if (!acceptingInput || transitioning) return;
+  acceptingInput = false;
+  transitioning = true;
+  answers[index] = kind;
+
+  const card = document.getElementById('card');
+  card.classList.add(kind === 'yes' ? 'leaving-yes' : 'leaving-no');
+  flashVerdict(kind);
+  chimes[kind]();
+
+  // Rotating spoken reaction, then advance.
+  let reactId;
+  if (kind === 'yes') { reactId = YES_LINES[yesCursor % YES_LINES.length]; yesCursor++; }
+  else                { reactId = NO_LINES[noCursor % NO_LINES.length]; noCursor++; }
+
+  let advanced = false;
+  const go = () => {
+    if (advanced) return;
+    advanced = true;
+    index++;
+    if (index >= DECK.length) finish();
+    else showQuestion();
+  };
+  speakLine(reactId, go);
+  setTimeout(go, 2200);   // fallback pacing so we never stall
+}
+
+function finish() {
+  const yes = answers.filter(a => a === 'yes').length;
+  document.getElementById('tally').innerHTML =
+    `You said <b>YES</b> to ${yes} of ${DECK.length}.`;
+  document.body.classList.remove('in-game');
+  document.body.classList.add('complete');
+  speakLine('yn-complete');
+}
+
+function startGame() {
+  index = 0;
+  answers = [];
+  yesCursor = 0; noCursor = 0;
+  document.body.classList.remove('complete');
+  document.body.classList.add('in-game');
+  buildProgress();
+  // Read the intro, then the first question.
+  speakLine('yn-intro', () => showQuestion());
+  // Fallback: if intro audio is totally absent, still start.
+  setTimeout(() => { if (!document.getElementById('questionText').textContent.trim() || document.getElementById('questionText').textContent === '…') showQuestion(); }, 4000);
+}
+
+/* ============================ Input ============================ */
+// Swipe LEFT = YES, swipe RIGHT = NO (as requested).
+let touchStartX = 0, touchStartY = 0, touchStartT = 0, touchInProgress = false;
+
+function bindGestures() {
+  document.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('touchend', onTouchEnd, { passive: false });
+  document.addEventListener('touchcancel', () => { touchInProgress = false; }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (document.body.classList.contains('in-game')) e.preventDefault(); }, { passive: false });
+}
+function onTouchStart(e) {
+  if (e.touches.length !== 1) { touchInProgress = false; return; }
+  const t = e.touches[0];
+  touchStartX = t.clientX; touchStartY = t.clientY;
+  touchStartT = Date.now(); touchInProgress = true;
+}
+function onTouchEnd(e) {
+  if (!touchInProgress) return;
+  touchInProgress = false;
+  if (!document.body.classList.contains('in-game')) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  if (Math.abs(dx) < SWIPE_MIN_DISTANCE || Math.abs(dx) < Math.abs(dy)) return;
+  answer(dx < 0 ? 'yes' : 'no');   // left = yes, right = no
+}
+
+// Desktop helpers: arrow keys + tapping the Yes/No labels.
+document.addEventListener('keydown', (e) => {
+  if (!document.body.classList.contains('in-game')) return;
+  if (e.key === 'ArrowLeft')  answer('yes');
+  if (e.key === 'ArrowRight') answer('no');
+});
+document.getElementById('choiceYes').addEventListener('click', () => answer('yes'));
+document.getElementById('choiceNo').addEventListener('click', () => answer('no'));
+
+/* ============================ Boot ============================ */
+document.getElementById('beginBtn').addEventListener('click', () => {
+  ensureAudio();
+  loadLines();
+  // Preload the intro + first couple questions.
+  ['yn-intro', 'yn-q1', 'yn-q2'].forEach(loadLineAudio);
+  startMusic();
+  startGame();
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  ensureAudio();
+  startGame();
+});
+bindGestures();
+</script>
+</body>
+</html>

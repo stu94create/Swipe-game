@@ -1,0 +1,47 @@
+name: Generate yes/no audio
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Regenerate even if MP3 already exists'
+        type: boolean
+        default: false
+      only:
+        description: 'Prefix match — yn-q = all questions, yn-yes = yes reactions. Leave blank for all.'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run generator
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: |
+          args=()
+          if [ "${{ inputs.force }}" = "true" ]; then args+=(--force); fi
+          if [ -n "${{ inputs.only }}" ]; then args+=("--only=${{ inputs.only }}"); fi
+          node scripts/generate-yesno-audio.mjs "${args[@]}"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yesno/audio/
+          if git diff --staged --quiet; then
+            echo "No audio changes to commit."
+          else
+            git commit -m "Generate yes/no audio with ElevenLabs"
+            git push
+          fi

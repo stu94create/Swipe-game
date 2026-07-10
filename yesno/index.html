@@ -579,11 +579,13 @@ document.getElementById('choiceYes').addEventListener('click', () => answer('yes
 document.getElementById('choiceNo').addEventListener('click', () => answer('no'));
 
 /* ============================ Boot ============================ */
-document.getElementById('beginBtn').addEventListener('click', () => {
+// Tap anywhere on the start screen to begin (same as Ballycrann — the button
+// is just the visual affordance). `once` so it only fires the first time.
+document.getElementById('startScreen').addEventListener('click', () => {
   ensureAudio();
   startMusic();
   startGame();
-});
+}, { once: true });
 document.getElementById('againBtn').addEventListener('click', () => {
   ensureAudio();
   startGame();

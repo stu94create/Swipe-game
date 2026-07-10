@@ -360,7 +360,6 @@ function pickRound() {
   deck = shuffled.slice(0, Math.min(ROUND_SIZE, shuffled.length));
 }
 const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
-const COMPLETE_LINE = "And that's the whole hoedown. You did just fine. Tap anywhere to play it all again.";
 const YES_LINES = ['Yee-haw! I knew it.', 'Well alright! That\'s a yes.', 'Now we\'re talkin.'];
 const NO_LINES  = ['Aw, alright then. A no it is.', 'Ha! Fair enough, darlin.', 'No? Well, more for me.'];
 
@@ -585,7 +584,10 @@ function finish() {
     `You said <b>YES</b> to ${yes} of ${deck.length}.`;
   document.body.classList.remove('in-game');
   document.body.classList.add('complete');
-  speakLine(COMPLETE_LINE);
+  // Speak the result AND the replay instruction, since the game is audio-first.
+  const spoken = `And that's the whole hoedown! You said yes to ${yes} out of ${deck.length}. `
+    + `To play again, just tap anywhere on the screen.`;
+  speakLine(spoken);
 }
 
 let hasPlayed = false;

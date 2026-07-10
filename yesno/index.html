@@ -401,6 +401,8 @@ function speakLine(text, onEnd) {
 
 /* ============================ Background music ============================ */
 const music = document.getElementById('music');
+const MUSIC_VOL = 0.3;       // background level (kept gentle under the voice)
+const MUSIC_DUCK = 0.1;      // even quieter while the voice is talking
 let musicWanted = true;      // user's mute preference
 let musicReady = false;
 music.volume = 0;
@@ -411,7 +413,7 @@ function startMusic() {
   if (!musicWanted) return;
   const p = music.play();
   if (p && p.catch) p.catch(() => {});   // absent file or blocked autoplay — game still works
-  fadeMusic(0.5, 900);
+  fadeMusic(MUSIC_VOL, 900);
 }
 let fadeTimer = null;
 function fadeMusic(target, ms) {
@@ -428,7 +430,7 @@ function fadeMusic(target, ms) {
 // Duck the music under narration so the voice sits on top.
 function duckMusic(voiceOn) {
   if (music.muted || !musicWanted) return;
-  fadeMusic(voiceOn ? 0.16 : 0.5, voiceOn ? 250 : 600);
+  fadeMusic(voiceOn ? MUSIC_DUCK : MUSIC_VOL, voiceOn ? 250 : 600);
 }
 document.getElementById('muteBtn').addEventListener('click', () => {
   musicWanted = !musicWanted;
@@ -586,7 +588,11 @@ document.getElementById('startScreen').addEventListener('click', () => {
   startMusic();
   startGame();
 }, { once: true });
-document.getElementById('againBtn').addEventListener('click', () => {
+// Tap anywhere on the complete screen to play again (the button is just the
+// affordance). Guard on the class so it only fires while that screen is up and
+// re-arms itself every time the game ends.
+document.getElementById('completeScreen').addEventListener('click', () => {
+  if (!document.body.classList.contains('complete')) return;
   ensureAudio();
   startGame();
 });

@@ -299,14 +299,17 @@
     <h2>Well done, darlin'</h2>
     <p class="tally" id="tally"></p>
     <button class="btn ghost" id="againBtn">Play Again</button>
+    <p class="rule">…or tap anywhere to go again</p>
   </section>
 
   <div class="verdict" id="verdict"></div>
 
 <script>
-/* ============================ Question deck ============================ */
-// `text` shows on the card; `say` is what the voice reads aloud.
-const DECK = [
+/* ============================ Question pool ============================ */
+// `text` shows on the card; `say` is what the voice reads aloud. Each game
+// randomly draws ROUND_SIZE of these, so every play-through is a fresh mix.
+const ROUND_SIZE = 10;
+const QUESTION_POOL = [
   { text: 'Do you love Dolly Parton?',                 say: 'Do you love Dolly Parton?' },
   { text: 'Is Friday night made for two-steppin’?',    say: 'Is Friday night made for two steppin?' },
   { text: 'Would you rather ride a horse than drive a truck?', say: 'Would you rather ride a horse than drive a truck?' },
@@ -316,10 +319,48 @@ const DECK = [
   { text: 'Would you dance in the kitchen right now?', say: 'Would you dance in the kitchen if your song came on right now?' },
   { text: 'Is a front porch the finest seat in the house?', say: 'Is a front porch the finest seat in the house?' },
   { text: 'Know all the words to a Johnny Cash tune?', say: 'Do you know all the words to at least one Johnny Cash tune?' },
-  { text: 'Last one — are you havin’ a good time?',    say: 'Last one now. Are you havin a good time?' },
+  { text: 'Is Willie Nelson a national treasure?',     say: 'Is Willie Nelson a national treasure?' },
+  { text: 'Would you two-step at a wedding?',          say: 'Would you two step at a wedding?' },
+  { text: 'Do you sing in the car with the windows down?', say: 'Do you sing in the car with the windows down?' },
+  { text: 'Is a bonfire better than a fancy night out?', say: 'Is a bonfire better than a fancy night out?' },
+  { text: 'Could you happily live on a ranch?',        say: 'Could you happily live on a ranch?' },
+  { text: 'Do you tear up at a good country love song?', say: 'Do you tear up at a good country love song?' },
+  { text: 'Is Shania Twain still the queen?',          say: 'Is Shania Twain still the queen?' },
+  { text: 'Would you wear a cowboy hat out to dinner?', say: 'Would you wear a cowboy hat out to dinner?' },
+  { text: 'Do you believe in love at first sight?',    say: 'Do you believe in love at first sight?' },
+  { text: 'Is a pickup truck a fine spot for a first date?', say: 'Is a pickup truck a fine place for a first date?' },
+  { text: 'Would you learn to line dance?',            say: 'Would you learn to line dance?' },
+  { text: 'Is homemade pie better than store-bought?', say: 'Is homemade pie better than store bought?' },
+  { text: 'Is George Strait the King of Country?',     say: 'Is George Strait the King of Country?' },
+  { text: 'Would you name a dog after a country singer?', say: 'Would you name a dog after a country singer?' },
+  { text: 'Do fireflies beat fireworks?',              say: 'Do fireflies beat fireworks?' },
+  { text: 'Could you square dance if the band struck up?', say: 'Could you square dance if the band struck up right now?' },
+  { text: 'Is a starry night better than a movie?',    say: 'Is a starry night better than a movie?' },
+  { text: 'Would you sing karaoke country to a crowd?', say: 'Would you sing karaoke country in front of a crowd?' },
+  { text: 'Does every good story need a little heartbreak?', say: 'Does every good story need a little heartbreak?' },
+  { text: 'Is Loretta Lynn a legend?',                 say: 'Is Loretta Lynn a legend?' },
+  { text: 'Would you slow dance in the living room tonight?', say: 'Would you slow dance in the living room tonight?' },
+  { text: 'Is the banjo underrated?',                  say: 'Is the banjo an underrated instrument?' },
+  { text: 'Do you prefer a handwritten letter to a text?', say: 'Do you prefer a handwritten letter to a text?' },
+  { text: 'Are good boots worth the splurge?',         say: 'Is a good pair of boots worth the splurge?' },
+  { text: 'Do you like your coffee strong and black?', say: 'Do you like your coffee strong and black?' },
+  { text: 'Is a mason jar a perfectly good glass?',    say: 'Is a mason jar a perfectly good drinking glass?' },
+  { text: 'Would you road-trip with no map and no plan?', say: 'Would you take a road trip with no map and no plan?' },
+  { text: 'Is Kacey Musgraves worth a listen?',        say: 'Is Kacey Musgraves worth a listen?' },
+  { text: 'Can a good song fix a bad day?',            say: 'Do you believe a good song can fix a bad day?' },
 ];
+// The active round — a random, non-repeating draw from the pool.
+let deck = [];
+function pickRound() {
+  const shuffled = QUESTION_POOL.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  deck = shuffled.slice(0, Math.min(ROUND_SIZE, shuffled.length));
+}
 const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
-const COMPLETE_LINE = "And that's the whole hoedown. You did just fine. Tap the button there to play it all again.";
+const COMPLETE_LINE = "And that's the whole hoedown. You did just fine. Tap anywhere to play it all again.";
 const YES_LINES = ['Yee-haw! I knew it.', 'Well alright! That\'s a yes.', 'Now we\'re talkin.'];
 const NO_LINES  = ['Aw, alright then. A no it is.', 'Ha! Fair enough, darlin.', 'No? Well, more for me.'];
 
@@ -471,7 +512,7 @@ let yesCursor = 0, noCursor = 0;
 function buildProgress() {
   const wrap = document.getElementById('progress');
   wrap.innerHTML = '';
-  DECK.forEach(() => {
+  deck.forEach(() => {
     const d = document.createElement('div');
     d.className = 'dot';
     wrap.appendChild(d);
@@ -486,7 +527,7 @@ function paintProgress() {
 }
 
 function showQuestion() {
-  const q = DECK[index];
+  const q = deck[index];
   const card = document.getElementById('card');
   document.getElementById('questionText').textContent = q.text;
   document.getElementById('hint').textContent = 'Swipe the card to answer';
@@ -531,7 +572,7 @@ function answer(kind) {
     if (advanced) return;
     advanced = true;
     index++;
-    if (index >= DECK.length) finish();
+    if (index >= deck.length) finish();
     else showQuestion();
   };
   speakLine(reaction, go);
@@ -541,23 +582,33 @@ function answer(kind) {
 function finish() {
   const yes = answers.filter(a => a === 'yes').length;
   document.getElementById('tally').innerHTML =
-    `You said <b>YES</b> to ${yes} of ${DECK.length}.`;
+    `You said <b>YES</b> to ${yes} of ${deck.length}.`;
   document.body.classList.remove('in-game');
   document.body.classList.add('complete');
   speakLine(COMPLETE_LINE);
 }
 
+let hasPlayed = false;
+const REPLAY_LINE = "Alright, here we go again! Swipe left for yes, right for no.";
 function startGame() {
   index = 0;
   answers = [];
   yesCursor = 0; noCursor = 0;
+  pickRound();                 // fresh random 10 for this play-through
+  // Neutralise the card so no leftover question lingers while the opening plays.
+  document.getElementById('questionText').textContent = '…';
+  document.getElementById('card').className = 'card';
+  document.getElementById('verdict').className = 'verdict';
   document.body.classList.remove('complete');
   document.body.classList.add('in-game');
   buildProgress();
-  // Read the FULL intro ("swipe left for yes, right for no"), then — and only
-  // then — the first question. speakLine's own watchdog guarantees this fires,
-  // so no separate timer is needed here (the old one cut the intro off early).
-  speakLine(INTRO_LINE, () => showQuestion());
+  // First game reads the FULL intro ("swipe left for yes, right for no"), then —
+  // and only then — the first question (speakLine's watchdog guarantees onEnd
+  // fires, so no separate timer is needed; the old one cut the intro off early).
+  // Replays get a shorter nudge since the player already knows the controls.
+  const opening = hasPlayed ? REPLAY_LINE : INTRO_LINE;
+  hasPlayed = true;
+  speakLine(opening, () => showQuestion());
 }
 
 /* ============================ Input ============================ */

@@ -383,26 +383,42 @@ function cancelCurrent() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   setSpeaking(false);
 }
-// Speak a line of text, then call onEnd. Guarded by speechGen so a new line
-// cancels a stale one's callback.
+// Speak a line of text, then call onEnd exactly once. Guarded by speechGen so a
+// new line cancels a stale one's callback. A watchdog guarantees onEnd fires
+// even if the browser never delivers `onend` (a known iOS quirk) — but it's
+// generous and cleared the moment the line really ends, so it never cuts a line
+// short or jumps ahead mid-sentence.
 function speakLine(text, onEnd) {
   const myGen = ++speechGen;
   cancelCurrent();
-  const done = () => { if (myGen === speechGen) { setSpeaking(false); if (onEnd) onEnd(); } };
-  if (!('speechSynthesis' in window) || !text) { setTimeout(done, 1200); return; }
+  let finished = false, watchdog = null;
+  const done = () => {
+    if (finished || myGen !== speechGen) return;
+    finished = true;
+    if (watchdog) clearTimeout(watchdog);
+    setSpeaking(false);
+    if (onEnd) onEnd();
+  };
+  if (!('speechSynthesis' in window) || !text) {
+    // No speech available: hold roughly as long as the line would take to read
+    // so the pacing still feels right, then continue.
+    watchdog = setTimeout(done, text ? Math.min(9000, 900 + text.length * 55) : 1000);
+    return;
+  }
   const u = new SpeechSynthesisUtterance(text);
   if (preferredVoice) u.voice = preferredVoice;
   u.rate = 0.98; u.pitch = 1.0; u.volume = 1.0;
   u.onstart = () => { if (myGen === speechGen) setSpeaking(true); };
   u.onend   = done;
   u.onerror = done;
+  watchdog = setTimeout(done, 2500 + text.length * 100);   // safety net only
   speechSynthesis.speak(u);
 }
 
 /* ============================ Background music ============================ */
 const music = document.getElementById('music');
-const MUSIC_VOL = 0.3;       // background level (kept gentle under the voice)
-const MUSIC_DUCK = 0.1;      // even quieter while the voice is talking
+const MUSIC_VOL = 0.14;      // quiet background — never prominent
+const MUSIC_DUCK = 0.05;     // barely there while the voice is talking
 let musicWanted = true;      // user's mute preference
 let musicReady = false;
 music.volume = 0;
@@ -538,10 +554,10 @@ function startGame() {
   document.body.classList.remove('complete');
   document.body.classList.add('in-game');
   buildProgress();
-  // Read the intro, then the first question.
+  // Read the FULL intro ("swipe left for yes, right for no"), then — and only
+  // then — the first question. speakLine's own watchdog guarantees this fires,
+  // so no separate timer is needed here (the old one cut the intro off early).
   speakLine(INTRO_LINE, () => showQuestion());
-  // Fallback: if speech never starts (muted device), still begin.
-  setTimeout(() => { const t = document.getElementById('questionText').textContent; if (!t.trim() || t === '…') showQuestion(); }, 7000);
 }
 
 /* ============================ Input ============================ */

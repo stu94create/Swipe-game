@@ -1,5 +1,8 @@
 {
-  "t-scene1-intro": "Welcome to Ballycrann. I'm Mary, your guide. We're standing at the harbour, boats clinking in the breeze. To walk east along the high street, swipe right with one finger, anywhere on the screen.",
+  "t-welcome": "Welcome to Ballycrann. I'm Mary, your guide. We're standing at the harbour, boats clinking in the breeze.",
+  "t-skip-offer": "Would you like the morning walk first, or shall I take you straight to the village? Swipe right for the walk, swipe left to go on ahead.",
+  "t-skip-yes": "Right so. Off we go.",
+  "t-scene1-intro-v2": "To walk east along the high street, swipe right with one finger, anywhere on the screen.",
   "t-scene1-vignette-1": "Past the bakery, the smell of warm soda bread on the air.",
   "t-scene1-vignette-2": "Along the stone wall, ivy spilling over the top.",
   "t-scene1-vignette-3": "You've reached the post office, with its bright red door.",

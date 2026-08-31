@@ -40,6 +40,7 @@ Each interior splits into "by the door" and "deeper in" — swipe right inside t
 
 The tutorial is "A Morning Walk." It introduces every gesture before letting the player wander.
 
+0. **offerSkip** — Mary says the welcome, then offers a choice: swipe **right** for the walk, swipe **left** to go straight to the village. Swipe left drops into wander mode via `enterWander(false)`, so Mary still recites the whole gesture vocabulary on the way in.
 1. **scene1** — swipe right
 2. **scene3** — swipe left
 3. **scene4** — swipe up
@@ -52,6 +53,8 @@ The tutorial is "A Morning Walk." It introduces every gesture before letting the
 10. **chapterComplete → enterWander** — drop into free-roam.
 
 Each scene calls `practiceGesture(target, introId, vignetteIds, onDone)`, which speaks an intro line, waits for three successful gestures, says one vignette per success, then chains to the next scene.
+
+The skip offer is deliberately un-losable: it's answered with a gesture the player may not have learned yet, so a wrong gesture just re-asks, and silence re-asks once after `REPROMPT_AFTER` and then starts the walk by itself. Swipe right — the reflex answer, and what Mary asks for constantly — is the one that leads to the tutorial. "Or restart the tutorial" on the complete screen calls `startChapter(false)`, which goes straight to scene1 without asking again.
 
 ## Wander mode
 

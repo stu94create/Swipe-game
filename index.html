@@ -917,7 +917,69 @@ function practiceGesture(target, introId, vignetteIds, onDone) {
 }
 
 // -------- Chapter flow --------
-function startChapter() {
+// Warmed both by chapterComplete and by the skip-ahead answer, so Mary's
+// wander intro plays without a fetch pause either way in.
+const WANDER_WARM_IDS = [
+  'w-intro-v2', 'w-edge-west', 'w-edge-east', 'w-nobody',
+  'w-nothing-up', 'w-nothing-down', 'w-nothing-to-take', 'w-nothing-to-reach',
+  'w-no-door', 'already-taken',
+  'w-harbour-desc', 'w-harbour-up', 'w-harbour-down', 'w-harbour-pickup'
+];
+
+// The welcome, then a choice: practise the gestures first, or go straight to
+// the village. The answer needs the very gesture scene1 teaches, so this can
+// never be a locked door — a wrong gesture re-asks, and silence eventually
+// starts the walk on its own. Swipe right (the reflex answer, and what Mary
+// asks for constantly) is the safe one.
+function offerSkip() {
+  preloadAhead(['t-welcome', 't-skip-offer', 't-skip-yes']);
+  let asked = 0;
+
+  function startWalk(acknowledge) {
+    clearReprompt();
+    setWaiting(false);
+    gestureHandler = null;
+    if (acknowledge) speakLine('t-skip-yes', () => setTimeout(scene1, 400));
+    else setTimeout(scene1, 400);
+  }
+
+  function skipAhead() {
+    clearReprompt();
+    setWaiting(false);
+    gestureHandler = null;
+    preloadAhead(WANDER_WARM_IDS);
+    enterWander(false);
+  }
+
+  function armTimer() {
+    clearReprompt();
+    repromptTimer = setTimeout(() => {
+      if (!waitingForGesture || gestureHandler !== handler) return;
+      if (asked === 0) { asked = 1; speakLine('t-skip-offer', armTimer); }
+      else startWalk(false);
+    }, REPROMPT_AFTER);
+  }
+
+  function handler(g) {
+    if (g !== 'swipe-left' && g !== 'swipe-right') {
+      clearReprompt();
+      sounds.almost();
+      speakLine('t-skip-offer', armTimer);
+      return;
+    }
+    flashSuccess();
+    sounds.success();
+    if (g === 'swipe-left') skipAhead();
+    else startWalk(true);
+  }
+
+  setWaiting(true);
+  setInstruction('Right for the walk', 'Left to go straight to the village');
+  gestureHandler = handler;
+  speakSequence(['t-welcome', 't-skip-offer'], armTimer);
+}
+
+function startChapter(withOffer) {
   document.body.classList.remove('complete');
   document.body.classList.add('in-game');
   ensureAudio();
@@ -925,11 +987,12 @@ function startChapter() {
   streak = 0;
   scrapbook = [];
   updateBar();
-  setTimeout(scene1, 400);
+  if (withOffer) setTimeout(offerSkip, 400);
+  else setTimeout(scene1, 400);
 }
 
 function scene1() {
-  practiceGesture('swipe-right', 't-scene1-intro',
+  practiceGesture('swipe-right', 't-scene1-intro-v2',
     ['t-scene1-vignette-1', 't-scene1-vignette-2', 't-scene1-vignette-3'],
     scene3);
 }
@@ -1047,12 +1110,7 @@ function chapterComplete() {
   gestureHandler = null;
   clearReprompt();
   // Warm the wander intro + harbour content while the completion speech plays.
-  preloadAhead([
-    'w-intro-v2', 'w-edge-west', 'w-edge-east', 'w-nobody',
-    'w-nothing-up', 'w-nothing-down', 'w-nothing-to-take', 'w-nothing-to-reach',
-    'w-no-door', 'already-taken',
-    'w-harbour-desc', 'w-harbour-up', 'w-harbour-down', 'w-harbour-pickup'
-  ]);
+  preloadAhead(WANDER_WARM_IDS);
   speakLine('t-complete-v2', () => enterWander(true));
 }
 
@@ -1286,15 +1344,15 @@ async function beginTutorial() {
   // cold load. Every subsequent scene + wander step prefetches its own lines
   // when entered — see practiceGesture, moveWander, enterInterior.
   preloadAhead([
-    't-scene1-intro',
+    't-welcome', 't-skip-offer', 't-skip-yes', 't-scene1-intro-v2',
     't-scene1-vignette-1', 't-scene1-vignette-2', 't-scene1-vignette-3',
     'cue-once-more-swipe-right', 'cue-again-swipe-right',
     'reprompt-swipe-right', 'almost-swipe-right'
   ]);
-  startChapter();
+  startChapter(true);
 }
 document.getElementById('startScreen').addEventListener('click', beginTutorial, { once: true });
-document.getElementById('replayBtn').addEventListener('click', startChapter);
+document.getElementById('replayBtn').addEventListener('click', () => startChapter(false));
 document.getElementById('wanderBtn').addEventListener('click', enterWander);
 document.getElementById('wanderDoneBtn').addEventListener('click', exitWander);
 

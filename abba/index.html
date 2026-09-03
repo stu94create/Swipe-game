@@ -798,7 +798,7 @@
     musicRouted, voiceRouted, ducked, playing,
     musicGain: musicRouted ? +musicGain.gain.value.toFixed(4) : music.volume,
     voiceGain: voiceRouted ? voiceBus.gain.value : 1,
-    clipsDecoded: clipCache.size,
+    clipsCached: clipCache.size, cacheMB: +(cacheBytes / 1048576).toFixed(1),
     elementVolume: music.volume,
   });
   function stopMusic() {
@@ -828,13 +828,34 @@
   // and it is the only way an element can be lifted above volume 1 — a buffer
   // source has neither problem. Decoded buffers are kept, so a line repeated
   // later in the game costs nothing.
-  const clipCache = new Map();
+  // Decoded audio is float32 PCM: the whole voice set is 12 minutes, which is
+  // 12 MB as mp3 but 129 MB decoded — enough to have a phone kill the tab. Keep
+  // a bounded window of the most recently used instead, and let the HTTP cache
+  // handle anything evicted.
+  const CACHE_BYTES = 20 * 1024 * 1024;
+  const clipCache = new Map();          // insertion order == least recent first
+  let cacheBytes = 0;
+  const sizeOf = buf => buf.length * buf.numberOfChannels * 4;
+  function cachePut(file, buf) {
+    clipCache.set(file, buf); cacheBytes += sizeOf(buf);
+    for (const [k, v] of clipCache) {
+      if (cacheBytes <= CACHE_BYTES) break;
+      if (k === file) continue;         // never evict what we are about to play
+      clipCache.delete(k); cacheBytes -= sizeOf(v);
+    }
+  }
+  function cacheGet(file) {
+    const buf = clipCache.get(file);
+    if (buf) { clipCache.delete(file); clipCache.set(file, buf); }   // touch
+    return buf;
+  }
   const decode = data => new Promise((ok, no) => {
     const p = ac.decodeAudioData(data, ok, no);          // Safari wants the callbacks
     if (p && p.then) p.then(ok, no);
   });
   async function loadClip(file) {
-    if (clipCache.has(file)) return clipCache.get(file);
+    const hit = cacheGet(file);
+    if (hit) return hit;
     let last;
     for (let attempt = 0; attempt < 2; attempt++) {   // one retry: phones drop requests
       try {
@@ -842,7 +863,7 @@
         if (r.status === 404) { const e = new Error('absent'); e.absent = true; throw e; }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const buf = await decode(await r.arrayBuffer());
-        clipCache.set(file, buf);
+        cachePut(file, buf);
         return buf;
       } catch (e) {
         if (e.absent) throw e;
@@ -959,17 +980,20 @@
 
   async function begin(roundSet, welcome) {
     state.rounds = roundSet; state.round = 0; state.idx = 0; resetStats();
+    ducked = false;                        // a quit mid-sentence must not carry over
     ctx(); warmSpeech(); show('play'); $('#qtext').textContent = '…';
     setIntensity(roundSet[0].level);
     const ok = await say(welcome); if (!ok) return;
     startRound();
   }
   async function startRound() {
+    if (state.screen !== 'play') return;
     const r = cur(); state.level = r.level; state.idx = 0;
     $('#roundLabel').textContent = r.name; unlock(r.gestures); $('#qtext').textContent = r.name;
-    // everything this round will say, plus the replies that come up constantly
-    prefetch([r.intro, r.hint, ...r.items.flatMap(it => [it.line, it.fact]),
-      ...praise, ...ack, ...ALL.map(g => T(`m-${g}`))]);
+    // the replies that come up constantly, then just the next few questions —
+    // a rolling window, so the cache is never asked to hold a whole round
+    prefetch([r.intro, r.hint, ...praise, ...ack, ...ALL.map(g => T(`m-${g}`)),
+      ...r.items.slice(0, 3).flatMap(it => [it.line, it.fact])]);
     if (r.crowd) { sfx.crowd(3.2); await wait(2600); if (state.screen !== 'play') return; }
     setIntensity(r.level); sfx.sting(r.level);
     await wait(r.level >= 2 ? 900 : 700);
@@ -977,11 +1001,16 @@
     present();
   }
   function present() {
+    if (state.screen !== 'play') return;   // quit landed while a reply was still speaking
     const it = item(); state.tries = 0; state.awaiting = true;
+    prefetch(cur().items.slice(state.idx + 1, state.idx + 4).flatMap(n => [n.line, n.fact]));
     $('#qtext').textContent = it.line.t;
     say(it.line); // not awaited: a confident player can answer while it's still talking
   }
   function next() {
+    // "Start over" cannot cancel the timer that brings the next question in, so
+    // the timer has to notice it is no longer wanted.
+    if (state.screen !== 'play') return;
     state.idx++;
     if (state.idx >= cur().items.length) { state.round++; if (state.round >= state.rounds.length) return finish(); return startRound(); }
     present();

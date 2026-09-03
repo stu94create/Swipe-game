@@ -761,7 +761,7 @@
   if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
   const feedback = $('#feedback');
   let sayToken = 0, clipPlaying = null;
-  function speakOne(line, rate) {
+  function speakOne(line, rate, token) {
     return new Promise(res => {
       const file = line.i ? `voice/${line.i}.mp3` : null;
       if (file && !missing.has(file)) {
@@ -769,14 +769,20 @@
         // A missing clip fires BOTH the error event and the play() rejection,
         // so the fallback has to be one-shot or the line gets spoken twice.
         let fellBack = false;
-        const fallback = () => {
+        const fallback = err => {
           if (fellBack) return;
           fellBack = true;
-          missing.add(file); clipPlaying = null;
+          clipPlaying = null;
+          // Answering early cuts a clip off mid-word, which rejects play() too.
+          // That is not a missing clip: stay quiet and let the next line run,
+          // rather than reading the abandoned one out in the browser voice and
+          // writing the file off as absent for the rest of the session.
+          if (token !== sayToken || (err && err.name === 'AbortError')) return res();
+          missing.add(file);
           speakTts(line.t, rate).then(res);
         };
         a.addEventListener('ended', () => res());
-        a.addEventListener('error', fallback);
+        a.addEventListener('error', () => fallback());
         a.play().catch(fallback);
         return;
       }
@@ -800,7 +806,7 @@
     feedback.textContent = parts.map(p => p.t).join(' ');
     duck(true);
     const rate = [1, 1.03, 1.07, 1.13][state.level] || 1;
-    for (const p of parts) { if (my !== sayToken) break; await speakOne(p, rate); }
+    for (const p of parts) { if (my !== sayToken) break; await speakOne(p, rate, my); }
     if (my === sayToken) duck(false);
     return my === sayToken;
   }

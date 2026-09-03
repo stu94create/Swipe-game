@@ -194,13 +194,37 @@
     'praise-6': 'Clean as you like.',
     'praise-7': 'Beautiful.',
 
-    /* --- reactions to an opinion, when the question has nothing specific to say --- */
-    'ack-1': 'Noted.',
+    /* --- reactions to an opinion, when the question has nothing specific to
+       say. Grouped by what the player actually answered: "Good taste" lands
+       badly after a no. The six original IDs keep their names and their
+       recordings, sorted into whichever group they suit. --- */
+    'ack-3': 'Good taste.',                       // love it
+    'ack-up-1': 'A person of taste. We will get on.',
+    'ack-up-2': 'Loudly, and with the windows down.',
+    'ack-up-3': 'Agreed, and I do not say that lightly.',
+    'ack-up-4': 'Sequins for you.',
+    'ack-up-5': 'Somebody gets it.',
+
+    'ack-1': 'Noted.',                            // yes
     'ack-2': 'Fair enough.',
-    'ack-3': 'Good taste.',
-    'ack-4': 'Fine by me.',
     'ack-5': 'Duly recorded.',
+    'ack-yes-1': 'Sensible.',
+    'ack-yes-2': 'I had a feeling you would say that.',
+    'ack-yes-3': 'That is the right sort of answer.',
+
+    'ack-4': 'Fine by me.',                       // no
     'ack-6': 'I see.',
+    'ack-no-1': 'Bold.',
+    'ack-no-2': 'Understood. Disappointed, but understood.',
+    'ack-no-3': 'Each to their own, I suppose.',
+    'ack-no-4': 'Interesting. We will let that one go.',
+
+    'ack-nfm-1': 'Harsh, but recorded.',          // not for me
+    'ack-nfm-2': 'Noted, with a small sigh.',
+    'ack-nfm-3': 'That one goes in the file.',
+    'ack-nfm-4': 'Fair. It is not for everyone.',
+    'ack-nfm-5': 'Oh dear. Moving swiftly on.',
+    'ack-nfm-6': 'I will pass that along to Benny.',
 
     /* --- bare commands, round 4 and practice --- */
     'cue-up-1': 'Swipe up!',
@@ -486,7 +510,12 @@
   };
 
   const praise = ['praise-1', 'praise-2', 'praise-3', 'praise-4', 'praise-5', 'praise-6', 'praise-7'].map(T);
-  const ack = ['ack-1', 'ack-2', 'ack-3', 'ack-4', 'ack-5', 'ack-6'].map(T);
+  const ackBy = {
+    up:    ['ack-3', 'ack-up-1', 'ack-up-2', 'ack-up-3', 'ack-up-4', 'ack-up-5'].map(T),
+    left:  ['ack-1', 'ack-2', 'ack-5', 'ack-yes-1', 'ack-yes-2', 'ack-yes-3'].map(T),
+    right: ['ack-4', 'ack-6', 'ack-no-1', 'ack-no-2', 'ack-no-3', 'ack-no-4'].map(T),
+    down:  ['ack-nfm-1', 'ack-nfm-2', 'ack-nfm-3', 'ack-nfm-4', 'ack-nfm-5', 'ack-nfm-6'].map(T),
+  };
   const drillText = {
     up: ['cue-up-1', 'cue-up-2', 'cue-up-3', 'cue-up-4'].map(T),
     down: ['cue-down-1', 'cue-down-2', 'cue-down-3', 'cue-down-4'].map(T),
@@ -1080,7 +1109,7 @@
     $('#roundLabel').textContent = r.name; unlock(r.gestures); $('#qtext').textContent = r.name;
     // the replies that come up constantly, then just the next few questions —
     // a rolling window, so the cache is never asked to hold a whole round
-    prefetch([r.intro, r.hint, ...praise, ...ack, ...ALL.map(g => T(`m-${g}`)),
+    prefetch([r.intro, r.hint, ...praise, ...Object.values(ackBy).flat(), ...ALL.map(g => T(`m-${g}`)),
       ...r.items.slice(0, 3).flatMap(it => [it.line, it.fact])]);
     if (r.crowd) { sfx.crowd(3.2); await wait(2600); if (state.screen !== 'play') return; }
     setIntensity(r.level); sfx.sting(r.level);
@@ -1150,7 +1179,7 @@
       return respond(T(`fix-${g}-${it.answer}`), false);
     }
     state.opinions.push({ id: it.line.i, g, t: it.line.t });   // it all adds up at the end
-    respond([T(`m-${g}`), it.react?.[g] || pickFresh(ack)], true);
+    respond([T(`m-${g}`), it.react?.[g] || pickFresh(ackBy[g] || ackBy.left)], true);
   }
 
   async function finish() {

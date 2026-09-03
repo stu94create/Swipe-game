@@ -22,7 +22,8 @@ Play it at `/abba/` (GitHub Pages serves from the repo root).
 | **Double tap** | Hear the question again |
 
 Four rounds unlock them in turn: two moves, then four, then all five, then all
-five at speed on rapid-fire questions. Arrow keys and Enter work on desktop.
+five against a clock. Round four shows a countdown and moves on without you if
+you dawdle. Arrow keys and Enter work on desktop.
 
 **Double tap is always a replay**, in every round and on every question — never
 an answer, never a mistake. The one exception is the drill that teaches the

@@ -74,6 +74,12 @@
   }
   #card.drag{transition:none}
   #qtext{margin:0; font-size:clamp(1.3rem,5.6vw,1.9rem); line-height:1.3; font-weight:700; color:var(--cream); max-width:100%}
+  /* Round 4's countdown. Only shown in a timed round, so it reads as a change
+     of gear rather than permanent pressure. */
+  #clock{position:absolute; left:50%; transform:translateX(-50%); top:calc(50% + 20vh + 10px);
+    width:min(74vw,400px); height:6px; border-radius:99px; background:rgba(255,245,224,.18); overflow:hidden}
+  #clock i{display:block; height:100%; width:100%; border-radius:99px; background:var(--gold)}
+  #clock.low i{background:var(--pink)}
   #tapHint{position:absolute; left:50%; transform:translateX(-50%); top:calc(50% + 20vh + 14px); font-size:.9rem; opacity:.75; margin:0; white-space:nowrap}
   #tapHint.locked{opacity:.2}
   #feedback{position:absolute; left:16px; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); margin:0 auto; max-width:38ch;
@@ -114,6 +120,7 @@
       <div class="dir right" data-g="right">No <small>swipe →</small></div>
       <div class="dir down" data-g="down">Not for me <small>swipe down</small></div>
       <div id="card"><p id="qtext">…</p></div>
+      <div id="clock" hidden><i></i></div>
       <p id="tapHint" data-g="doubletap">Tap twice to hear it again</p>
       <p id="feedback"></p>
     </div>
@@ -311,6 +318,18 @@
     'nudge-short': 'That swipe was a bit short. Make it a bigger flick, right across the screen.',
     'nudge-tap-double': 'That was one tap. For a double tap, tap twice quickly in the same spot.',
 
+    /* --- round four runs out of patience --- */
+    'r4-timeout-1': 'Too slow!',
+    'r4-timeout-2': 'Time! Moving on.',
+    'r4-timeout-3': 'Gone. Next!',
+    'r4-timeout-4': 'That is time. Keep up!',
+
+    /* --- a run of right answers --- */
+    'streak-3': 'That is three in a row.',
+    'streak-5': 'Five in a row. Steady on.',
+    'streak-7': 'Seven! Are you reading this off a book?',
+    'streak-broken': 'And there goes the streak.',
+
     /* --- rounds --- */
     'r1-intro': 'Round one. Waterloo. Just two moves to start. Swipe left for yes, swipe right for no. Your opinion, no wrong answers yet.',
     'r1-hint': 'For now it is left for yes, right for no.',
@@ -333,6 +352,19 @@
     'profile-sequins': 'And you own something with sequins, which was the right answer all along.',
     'profile-voyage': 'And you would be at Voyage tomorrow if somebody handed you a ticket.',
     'profile-weepy': 'And you like the sad ones best. The Winner Takes It All has a lot to answer for.',
+
+    /* --- somewhere for the profile to land: what to put on next --- */
+    'rec-dancing-queen': 'If Dancing Queen did it for you, put Voulez-Vous on next and turn it up.',
+    'rec-waterloo': 'You liked Waterloo, so try Ring Ring. That is where it all started.',
+    'rec-winner': 'The Winner Takes It All got you. You want One of Us next. Bring tissues.',
+    'rec-fernando': 'A Fernando person. Chiquitita is waiting for you.',
+    'rec-super-trouper': 'If Super Trouper is your one, try Lay All Your Love on Me.',
+    'rec-gimme': 'Gimme Gimme Gimme means you want Voulez-Vous, loud, after midnight.',
+    'rec-money': 'Money, Money, Money, then Does Your Mother Know, for the cheek of it.',
+    'rec-sos': 'If SOS is the one, go to Knowing Me, Knowing You. The same ache exactly.',
+    'rec-thank-you': 'Thank You for the Music. Follow it with Slipping Through My Fingers, if you are feeling strong.',
+    'rec-chiquitita': 'Chiquitita, then I Have a Dream, and the evening is settled.',
+    'rec-none': 'And if you take one thing away: put on Voyage, start to finish. It holds up.',
 
     /* --- practice mode --- */
     'pr-hint': 'Practice mode.',
@@ -528,6 +560,16 @@
   // getting it wrong is a fact to correct, not a technique to fix.
   const drill = (g, id, factId) => ({ type: 'drill', answer: g, line: id ? T(id) : pick(drillText[g]), fact: factId ? T(factId) : null });
   const quiz = (g, id, factId) => ({ type: 'quiz', answer: g, line: T(id), fact: factId ? T(factId) : null });
+  const timeoutLines = ['r4-timeout-1', 'r4-timeout-2', 'r4-timeout-3', 'r4-timeout-4'].map(T);
+  // Loved a song, so here is the next one. Written as T() calls so a typo is a
+  // build failure rather than a silent robot voice.
+  const RECS = {
+    's-dancing-queen': T('rec-dancing-queen'), 's-waterloo': T('rec-waterloo'),
+    's-winner': T('rec-winner'), 's-fernando': T('rec-fernando'),
+    's-super-trouper': T('rec-super-trouper'), 's-gimme': T('rec-gimme'),
+    's-money': T('rec-money'), 's-sos': T('rec-sos'),
+    's-thank-you': T('rec-thank-you'), 's-chiquitita': T('rec-chiquitita'),
+  };
   const quizWrong = ['quiz-wrong-1', 'quiz-wrong-2', 'quiz-wrong-3', 'quiz-wrong-4', 'quiz-wrong-5',
     'quiz-wrong-6', 'quiz-wrong-7', 'quiz-wrong-8', 'quiz-wrong-9', 'quiz-wrong-10',
     'quiz-wrong-11', 'quiz-wrong-12', 'quiz-wrong-13'].map(T);
@@ -647,7 +689,7 @@
         hint: T('hint-all-five'), intro: T('r3-intro'),
         items: [drill('doubletap', 't-try-dt', 't-try-dt-a'),
           ...shuffle([...r3, drill('doubletap', 't-dt-more'), drill('doubletap', 'cue-doubletap-1')])] },
-      { name: 'Round 4 · Dancing Queen', gestures: ALL, level: 3, crowd: true,
+      { name: 'Round 4 · Dancing Queen', gestures: ALL, level: 3, crowd: true, timed: true,
         hint: T('hint-all-five'), intro: T('r4-intro-v2'), items: rapid },
     ];
   };
@@ -1076,9 +1118,10 @@
 
   /* ======================= game ======================= */
   const state = { screen: 'intro', rounds: [], round: 0, idx: 0, awaiting: false, tries: 0, level: 0, near: 0,
-    stats: {}, quiz: { asked: 0, right: 0 }, opinions: [] };
+    stats: {}, quiz: { asked: 0, right: 0 }, opinions: [], streak: 0, bestStreak: 0 };
   const resetStats = () => { state.stats = {}; ALL.forEach(g => state.stats[g] = { att: 0, first: 0 });
-    state.near = 0; state.quiz = { asked: 0, right: 0 }; state.opinions = []; };
+    state.near = 0; state.quiz = { asked: 0, right: 0 }; state.opinions = [];
+    state.streak = 0; state.bestStreak = 0; };
   const cur = () => state.rounds[state.round];
   const item = () => cur().items[state.idx];
   const GAP = [500, 420, 340, 240];
@@ -1095,6 +1138,51 @@
     const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u);
   }
 
+  /* --- round four's countdown --- */
+  // The clock starts only once the question has finished being read, so a long
+  // question does not eat the time the player is given to answer it.
+  const CLOCK_MS = 4500;
+  const clockEl = $('#clock'), clockBar = clockEl.firstElementChild;
+  let clockTimer = null;
+  function clearClock() {
+    if (clockTimer) { clearTimeout(clockTimer); clockTimer = null; }
+    clockEl.hidden = true; clockEl.classList.remove('low');
+    clockBar.style.transition = 'none'; clockBar.style.width = '100%';
+  }
+  function startClock() {
+    const r = cur();
+    if (!r || !r.timed || state.screen !== 'play' || !state.awaiting) return;
+    clearClock();
+    clockEl.hidden = false;
+    void clockBar.offsetWidth;                    // commit the reset before animating
+    clockBar.style.transition = `width ${CLOCK_MS}ms linear`;
+    clockBar.style.width = '0%';
+    setTimeout(() => { if (clockTimer) clockEl.classList.add('low'); }, CLOCK_MS * 0.6);
+    clockTimer = setTimeout(timeUp, CLOCK_MS);
+  }
+  function timeUp() {
+    clockTimer = null;
+    if (state.screen !== 'play' || !state.awaiting) return;
+    const it = item();
+    clearClock(); sfx.miss();
+    if (it.type === 'quiz') { state.quiz.asked++; breakStreak(); }
+    respond([pickFresh(timeoutLines), it.fact], true);
+  }
+
+  /* --- runs of right answers --- */
+  function scoreStreak() {
+    state.streak++;
+    state.bestStreak = Math.max(state.bestStreak, state.streak);
+    return state.streak === 3 ? T('streak-3')
+      : state.streak === 5 ? T('streak-5')
+      : state.streak === 7 ? T('streak-7') : null;
+  }
+  function breakStreak() {
+    const had = state.streak >= 3;
+    state.streak = 0;
+    return had ? T('streak-broken') : null;       // only worth mentioning if it was a run
+  }
+
   async function begin(roundSet, welcome) {
     state.rounds = roundSet; state.round = 0; state.idx = 0; resetStats();
     ducked = false;                        // a quit mid-sentence must not carry over
@@ -1105,6 +1193,7 @@
   }
   async function startRound() {
     if (state.screen !== 'play') return;
+    clearClock();
     const r = cur(); state.level = r.level; state.idx = 0;
     $('#roundLabel').textContent = r.name; unlock(r.gestures); $('#qtext').textContent = r.name;
     // the replies that come up constantly, then just the next few questions —
@@ -1122,19 +1211,27 @@
     const it = item(); state.tries = 0; state.awaiting = true;
     prefetch(cur().items.slice(state.idx + 1, state.idx + 4).flatMap(n => [n.line, n.fact]));
     $('#qtext').textContent = it.line.t;
-    say(it.line); // not awaited: a confident player can answer while it's still talking
+    clearClock();
+    // Not awaited: a confident player can answer while it is still talking. The
+    // clock only starts once it has stopped.
+    say(it.line).then(ok => { if (ok) startClock(); });
   }
   function next() {
     // "Start over" cannot cancel the timer that brings the next question in, so
     // the timer has to notice it is no longer wanted.
     if (state.screen !== 'play') return;
+    clearClock();
     state.idx++;
     if (state.idx >= cur().items.length) { state.round++; if (state.round >= state.rounds.length) return finish(); return startRound(); }
     present();
   }
   function respond(parts, advance) {
-    state.awaiting = false;
-    say(parts).then(ok => { if (!ok) return; if (advance) setTimeout(next, GAP[state.level] || 400); else state.awaiting = true; });
+    state.awaiting = false; clearClock();
+    say(parts).then(ok => {
+      if (!ok) return;
+      if (advance) return setTimeout(next, GAP[state.level] || 400);
+      state.awaiting = true; startClock();        // still their turn, clock again
+    });
   }
 
   function onGesture(g, meta = {}) {
@@ -1160,11 +1257,15 @@
         return respond(T(yesNo ? 'quiz-pair-yesno' : 'quiz-pair-truefalse'), false);
 
       state.quiz.asked++;
-      if (g === it.answer) { state.quiz.right++; sfx.good(); return respond([pickFresh(praise), it.fact], true); }
+      if (g === it.answer) {
+        state.quiz.right++; sfx.good();
+        return respond([pickFresh(praise), it.fact, scoreStreak()], true);
+      }
+      const lost = breakStreak();
       // Say they got it wrong and give them the answer. Re-asking a yes/no you
       // have just been told is wrong teaches nothing.
       sfx.miss();
-      return respond([pickFresh(quizWrong), it.fact], true);
+      return respond([pickFresh(quizWrong), it.fact, lost], true);
     }
 
     if (it.type === 'drill') {
@@ -1209,6 +1310,9 @@
     // Song titles read back off the question they came from.
     const titles = g => ops.filter(o => o.g === g && /^s-/.test(o.id)).map(o => o.t.split('. ')[0]);
     const loved = titles('up'), spurned = titles('down');
+    // Somewhere for all that opinion to land: the next thing to put on.
+    const lovedIds = ops.filter(o => o.g === 'up').map(o => o.id);
+    const rec = lovedIds.map(id => RECS[id]).find(Boolean) || (ops.length ? T('rec-none') : null);
 
     // On screen: the ABBA score first, because that is what they came for, then
     // the profile, and the moves underneath.
@@ -1217,6 +1321,8 @@
     if (profile) parts.push(profile.t);
     if (loved.length) parts.push(`Loved: ${loved.slice(0, 4).join(', ')}.`);
     if (spurned.length) parts.push(`Not for you: ${spurned.slice(0, 3).join(', ')}.`);
+    if (rec) parts.push(rec.t);
+    if (state.bestStreak >= 3) parts.push(`Best run: ${state.bestStreak} right in a row.`);
     parts.push(`You landed ${hits} of ${total} moves first time.`);
     const ranked = rows.filter(x => x.att > 1).sort((a, b) => b.first / b.att - a.first / a.att);
     const best = ranked[0], worst = ranked[ranked.length - 1];
@@ -1235,6 +1341,7 @@
     }
     if (profile) spoken.push(profile);
     if (signature) spoken.push(signature);
+    if (rec) spoken.push(rec);
     // One line about the moves, not two — they are the supporting act now.
     if (clearWorst) spoken.push(T(`end-practise-${worst.g}`));
     else if (ranked.length > 1) spoken.push(T('end-steady'));
@@ -1246,6 +1353,7 @@
       :                 T('end-band-learning'));
     if (state.near) spoken.push(T('end-fixed'));
     state.level = 0;
+    spoken.length = Math.min(spoken.length, 6);   // a payoff, not a monologue
     await say(spoken);
   }
 
@@ -1316,7 +1424,7 @@
 
   $('#againBtn').addEventListener('click', () => begin(buildRounds(), T('sys-again')));
   $('#practiceBtn2').addEventListener('click', () => begin(practiceRounds('all'), T('sys-practice')));
-  $('#quit').addEventListener('click', () => { sayToken++; stopVoice(); stopMusic(); state.awaiting = false; state.level = 0; document.documentElement.style.setProperty('--sequin', 0.4); show('intro'); });
+  $('#quit').addEventListener('click', () => { sayToken++; stopVoice(); stopMusic(); clearClock(); state.awaiting = false; state.level = 0; document.documentElement.style.setProperty('--sequin', 0.4); show('intro'); });
 
   /* ======================= voice line list (open index.html#lines) ======================= */
   if (location.hash === '#lines') {

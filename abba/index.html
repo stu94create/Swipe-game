@@ -566,12 +566,43 @@
   };
 
   /* ======================= sound engine ======================= */
-  let ac, master;
+  let ac, master, musicGain, voiceBus, graphAudio = false;
   const ctx = () => {
-    if (!ac) { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = 0.9; master.connect(ac.destination); }
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      master = ac.createGain(); master.gain.value = 0.9; master.connect(ac.destination);
+      buildBuses();
+    }
     if (ac.state === 'suspended') ac.resume();
     return ac;
   };
+  // iOS Safari ignores HTMLMediaElement.volume outright — assigning to it does
+  // nothing — so the music could neither be set to a bed level nor ducked under
+  // the voice there: Mary was talking under a full-volume disco track. Routing
+  // the track through the graph gives us a gain we can actually set on every
+  // platform.
+  //
+  // The voice gets its own bus for the opposite reason: an element cannot go
+  // above volume 1, and the ElevenLabs clips land around -24 dBFS against a
+  // track mastered to -14, so at equal gain she sits *under* the music. On the
+  // bus she can be lifted, with a compressor catching the peaks that lift
+  // would otherwise push into clipping.
+  function buildBuses() {
+    try {
+      musicGain = ac.createGain(); musicGain.gain.value = 0.0001; musicGain.connect(master);
+      ac.createMediaElementSource(music).connect(musicGain);
+      music.volume = 1;                     // level is the bus's job now
+
+      const limiter = ac.createDynamicsCompressor();
+      limiter.threshold.value = -6; limiter.knee.value = 3; limiter.ratio.value = 12;
+      limiter.attack.value = 0.003; limiter.release.value = 0.12;
+      voiceBus = ac.createGain(); voiceBus.gain.value = VOICE_GAIN;
+      voiceBus.connect(limiter); limiter.connect(master);
+      graphAudio = true;
+    } catch (_) {
+      graphAudio = false;                   // fall back to element volume
+    }
+  }
   const out = (node, pan) => {
     const a = ctx();
     if (pan !== undefined && a.createStereoPanner) { const p = a.createStereoPanner(); p.pan.value = pan; node.connect(p); p.connect(master); }
@@ -672,14 +703,25 @@
   // It speeds up each round, and synthesised layers join on top: handclaps from round 2,
   // shaker and tambourine from round 3, brass stabs on round 4.
   const BPM = 120;                                  // set to your track's actual tempo
-  const RATE = [1, 1.04, 1.09, 1.15], VOL = 0.28, DUCK = 0.08;
+  // VOL/DUCK are bus gains, multiplied by master (0.9). VOL lands where the old
+  // element volume of 0.28 sat; DUCK drops the track ~23 dB under it so the
+  // voice is unmistakably on top. VOICE_GAIN is +8 dB, which puts the loudest
+  // clip's peak just under full scale before the limiter.
+  const RATE = [1, 1.04, 1.09, 1.15], VOL = 0.30, DUCK = 0.07, VOICE_GAIN = 2.6;
   const music = new Audio('audio/track.mp3');
   music.loop = true; music.preload = 'auto'; music.volume = 0;
   let ducked = false, playing = false, musicEnabled = true;
   const musicWanted = () => musicEnabled;
-  function fadeTo(el, target, ms) {
-    const start = el.volume, t0 = performance.now();
-    const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); el.volume = start + (target - start) * k; if (k < 1) requestAnimationFrame(step); };
+  function setMusicLevel(target, ms) {
+    if (graphAudio) {
+      const t = ac.currentTime, g = musicGain.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(Math.max(0.0001, g.value), t);
+      g.linearRampToValueAtTime(Math.max(0.0001, target), t + ms / 1000);
+      return;
+    }
+    const start = music.volume, t0 = performance.now();
+    const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); music.volume = start + (target - start) * k; if (k < 1) requestAnimationFrame(step); };
     requestAnimationFrame(step);
   }
 
@@ -719,7 +761,7 @@
   }
   function startLayers() {
     stopLayers(); beat = 0;
-    const lv = v => v * (ducked ? 0.35 : 1);              // layers drop back while the voice is talking
+    const lv = v => v * (ducked ? 0.22 : 1);              // layers drop back while the voice is talking
     const step = () => {
       const t = ctx().currentTime, b = beat % 16, beatLen = 60 / BPM / (RATE[layerLevel] || 1);
       if (layerLevel >= 1 && (b === 4 || b === 12)) clapHit(t, lv(0.18));                 // claps on the backbeat
@@ -740,12 +782,24 @@
     document.documentElement.style.setProperty('--sequin', 0.4 + level * 0.18);
     if (!musicWanted()) { stopLayers(); return; }
     music.playbackRate = RATE[level] || 1;
-    if (!playing) { playing = true; music.play().then(() => fadeTo(music, ducked ? DUCK : VOL, 1500)).catch(() => {}); }
+    if (!playing) { playing = true; music.play().then(() => setMusicLevel(ducked ? DUCK : VOL, 1500)).catch(() => {}); }
     if (level >= 1 && !layerTimer) startLayers();
     if (level === 0) stopLayers();
   }
-  function stopMusic() { music.pause(); music.currentTime = 0; music.volume = 0; playing = false; stopLayers(); layerLevel = 0; }
-  function duck(on) { ducked = on; if (playing && !music.paused) fadeTo(music, on ? DUCK : VOL, 250); }
+  // Read-only view of the mix, for checking levels from the console.
+  if (typeof window !== 'undefined') window.SWIPER_MIX = () => ({
+    graphAudio, ducked, playing,
+    musicGain: graphAudio ? +musicGain.gain.value.toFixed(4) : music.volume,
+    voiceGain: graphAudio ? voiceBus.gain.value : 1,
+    elementVolume: music.volume,
+  });
+  function stopMusic() {
+    music.pause(); music.currentTime = 0;
+    if (graphAudio) { musicGain.gain.cancelScheduledValues(ac.currentTime); musicGain.gain.value = 0.0001; }
+    else music.volume = 0;
+    playing = false; stopLayers(); layerLevel = 0;
+  }
+  function duck(on) { ducked = on; if (playing && !music.paused) setMusicLevel(on ? DUCK : VOL, 250); }
 
   /* ======================= voice ======================= */
   // A line with a clip at voice/<id>.mp3 plays from file (ElevenLabs); anything
@@ -760,19 +814,33 @@
   }
   if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
   const feedback = $('#feedback');
-  let sayToken = 0, clipPlaying = null;
+  let sayToken = 0, clipPlaying = null, clipCleanup = null;
   function speakOne(line, rate, token) {
     return new Promise(res => {
       const file = line.i ? `voice/${line.i}.mp3` : null;
       if (file && !missing.has(file)) {
         const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
+        // On the voice bus she can be lifted above what an element allows.
+        let node = null;
+        if (graphAudio) {
+          try { node = ac.createMediaElementSource(a); node.connect(voiceBus); }
+          catch (_) { node = null; }
+        }
+        let guard = null;
+        const cleanup = () => {
+          if (guard) { clearTimeout(guard); guard = null; }
+          if (node) { try { node.disconnect(); } catch (_) {} node = null; }
+        };
+        clipCleanup = cleanup;
+        // A clip that never loads must not leave the game waiting for ever.
+        guard = setTimeout(() => { cleanup(); res(); }, 20000);
         // A missing clip fires BOTH the error event and the play() rejection,
         // so the fallback has to be one-shot or the line gets spoken twice.
         let fellBack = false;
         const fallback = err => {
           if (fellBack) return;
           fellBack = true;
-          clipPlaying = null;
+          cleanup(); clipPlaying = null;
           // Answering early cuts a clip off mid-word, which rejects play() too.
           // That is not a missing clip: stay quiet and let the next line run,
           // rather than reading the abandoned one out in the browser voice and
@@ -781,7 +849,7 @@
           missing.add(file);
           speakTts(line.t, rate).then(res);
         };
-        a.addEventListener('ended', () => res());
+        a.addEventListener('ended', () => { cleanup(); res(); });
         a.addEventListener('error', () => fallback());
         a.play().catch(fallback);
         return;
@@ -798,7 +866,11 @@
       speechSynthesis.speak(u);
     });
   }
-  function stopVoice() { speechSynthesis?.cancel(); if (clipPlaying) { clipPlaying.pause(); clipPlaying = null; } }
+  function stopVoice() {
+    speechSynthesis?.cancel();
+    if (clipPlaying) { clipPlaying.pause(); clipPlaying = null; }
+    if (clipCleanup) { clipCleanup(); clipCleanup = null; }
+  }
   // Accepts spoken lines, or bare strings for text assembled at runtime.
   async function say(parts) {
     parts = [].concat(parts).filter(Boolean).map(p => typeof p === 'string' ? { t: p } : p);

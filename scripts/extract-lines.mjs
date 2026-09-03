@@ -49,7 +49,7 @@ for (const m of src.matchAll(/\[([^\]]*)\]\.map\(T\)/g))                        
 
 // Built from a gesture name at the moment they're spoken.
 for (const g of GESTURES) {
-  wanted.add(`locked-${g}`);
+  if (g !== 'doubletap') wanted.add(`locked-${g}`);   // replay is never locked
   wanted.add(`m-${g}`);
   wanted.add(`pr-intro-${g}`);
   wanted.add(`end-practise-${g}`);

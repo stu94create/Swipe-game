@@ -225,7 +225,6 @@
     'locked-right': 'That is a swipe right. It comes in later.',
     'locked-up': 'That is a swipe up. It comes in later.',
     'locked-down': 'That is a swipe down. It comes in later.',
-    'locked-doubletap': 'That is a double tap. It comes in later.',
 
     /* --- wrong move on a drill: what came through, and how to do the one asked for.
        fix-<what they did>-<what was wanted>. --- */
@@ -250,12 +249,22 @@
     'fix-doubletap-up': 'That came through as a double tap. For a swipe up, start low down and flick up towards the top of the screen.',
     'fix-doubletap-down': 'That came through as a double tap. For a swipe down, start high up and flick down towards the bottom.',
 
+    /* --- getting an ABBA question wrong is not a botched swipe --- */
+    'quiz-wrong-1': 'Not quite.',
+    'quiz-wrong-2': 'Afraid not.',
+    'quiz-wrong-3': 'Good guess, but no.',
+    'quiz-pair-yesno': 'That one is a yes or no. Swipe left for yes, right for no.',
+    'quiz-pair-truefalse': 'That one is true or false. Swipe up for true, down for false.',
+    'end-quiz-all': 'And you got every ABBA question right. Encyclopaedic.',
+    'end-quiz-most': 'And you knew most of your ABBA facts.',
+    'end-quiz-some': 'And the ABBA facts could do with a brush up.',
+    'end-quiz-few': 'And the facts were mostly news to you. Now you know.',
+
     /* --- near misses --- */
     'nudge-diagonal-x': 'That was a bit diagonal. Keep it straight across, like drawing a line.',
     'nudge-diagonal-y': 'That was a bit diagonal. Keep it straight up and down, like drawing a line.',
     'nudge-short': 'That swipe was a bit short. Make it a bigger flick, right across the screen.',
     'nudge-tap-double': 'That was one tap. For a double tap, tap twice quickly in the same spot.',
-    'nudge-tap-swipes': 'That was a tap. This round is swipes only. Flick your finger across the screen.',
 
     /* --- rounds --- */
     'r1-intro': 'Round one. Waterloo. Just two moves to start. Swipe left for yes, swipe right for no. Your opinion, no wrong answers yet.',
@@ -450,7 +459,12 @@
     right: ['cue-right-1', 'cue-right-2', 'cue-right-3', 'cue-right-4'].map(T),
     doubletap: ['cue-doubletap-1', 'cue-doubletap-2', 'cue-doubletap-3', 'cue-doubletap-4'].map(T),
   };
+  // A drill asks for a move: getting it wrong is a gesture to coach.
+  // A quiz asks about ABBA: the swipe is just how the answer is given, so
+  // getting it wrong is a fact to correct, not a technique to fix.
   const drill = (g, id, factId) => ({ type: 'drill', answer: g, line: id ? T(id) : pick(drillText[g]), fact: factId ? T(factId) : null });
+  const quiz = (g, id, factId) => ({ type: 'quiz', answer: g, line: T(id), fact: factId ? T(factId) : null });
+  const quizWrong = ['quiz-wrong-1', 'quiz-wrong-2', 'quiz-wrong-3'].map(T);
   const op = (id, react) => ({ type: 'opinion', line: T(id),
     react: react ? Object.fromEntries(Object.entries(react).map(([k, v]) => [k, T(v)])) : null });
 
@@ -472,18 +486,18 @@
     op('q-dressup', { left: 'q-dressup-l' }),
     op('q-eurovision-fan'),
     op('q-dq-best', { right: 'q-dq-best-r' }),
-    drill('left', 'f-sweden', 'f-sweden-a'),
-    drill('left', 'f-euro74', 'f-euro74-a'),
-    drill('right', 'f-members', 'f-members-a'),
-    drill('left', 'f-couples', 'f-couples-a'),
-    drill('left', 'f-gold', 'f-gold-a'),
-    drill('right', 'f-norway', 'f-norway-a'),
-    drill('right', 'f-euro73', 'f-euro73-a'),
-    drill('left', 'f-benny-keys', 'f-benny-keys-a'),
-    drill('left', 'f-agnetha-bjorn', 'f-agnetha-bjorn-a'),
-    drill('left', 'f-sequel', 'f-sequel-a'),
-    drill('right', 'f-fernando-cat', 'f-fernando-cat-a'),
-    drill('left', 'f-stig', 'f-stig-a'),
+    quiz('left', 'f-sweden', 'f-sweden-a'),
+    quiz('left', 'f-euro74', 'f-euro74-a'),
+    quiz('right', 'f-members', 'f-members-a'),
+    quiz('left', 'f-couples', 'f-couples-a'),
+    quiz('left', 'f-gold', 'f-gold-a'),
+    quiz('right', 'f-norway', 'f-norway-a'),
+    quiz('right', 'f-euro73', 'f-euro73-a'),
+    quiz('left', 'f-benny-keys', 'f-benny-keys-a'),
+    quiz('left', 'f-agnetha-bjorn', 'f-agnetha-bjorn-a'),
+    quiz('left', 'f-sequel', 'f-sequel-a'),
+    quiz('right', 'f-fernando-cat', 'f-fernando-cat-a'),
+    quiz('left', 'f-stig', 'f-stig-a'),
   ];
   // Round 2: love it / yes / no / not for me
   const pool2 = [
@@ -512,17 +526,17 @@
     op('s-summer-night-city'),
     op('s-i-have-a-dream'),
     op('s-eagle'),
-    drill('up', 'f-name', 'f-name-a'),
-    drill('up', 'f-voyage', 'f-voyage-a'),
-    drill('down', 'f-voyage-paris', 'f-voyage-paris-a'),
-    drill('up', 'f-flying', 'f-flying-a'),
-    drill('up', 'f-muriel', 'f-muriel-a'),
-    drill('up', 'f-cher', 'f-cher-a'),
-    drill('up', 'f-chess', 'f-chess-a'),
-    drill('down', 'f-euro24', 'f-euro24-a'),
-    drill('up', 'f-competition', 'f-competition-a'),
-    drill('up', 'f-fish', 'f-fish-a'),
-    drill('down', 'f-dq-1986', 'f-dq-1986-a'),
+    quiz('up', 'f-name', 'f-name-a'),
+    quiz('up', 'f-voyage', 'f-voyage-a'),
+    quiz('down', 'f-voyage-paris', 'f-voyage-paris-a'),
+    quiz('up', 'f-flying', 'f-flying-a'),
+    quiz('up', 'f-muriel', 'f-muriel-a'),
+    quiz('up', 'f-cher', 'f-cher-a'),
+    quiz('up', 'f-chess', 'f-chess-a'),
+    quiz('down', 'f-euro24', 'f-euro24-a'),
+    quiz('up', 'f-competition', 'f-competition-a'),
+    quiz('up', 'f-fish', 'f-fish-a'),
+    quiz('down', 'f-dq-1986', 'f-dq-1986-a'),
   ];
   // Round 3: all five, mixed
   const pool3 = [
@@ -530,16 +544,16 @@
     op('q-super-trouper-replay'),
     op('q-waterloo-or-fernando'),
     op('q-voulez-vous-short'),
-    drill('left', 'f-unicef', 'f-unicef-a'),
-    drill('down', 'f-broadway', 'f-broadway-a'),
-    drill('up', 'f-meryl', 'f-meryl-a'),
-    drill('left', 'f-benny-keys-2', 'f-benny-keys-a'),
-    drill('right', 'f-farewell', 'f-farewell-a'),
-    drill('up', 'f-brosnan', 'f-brosnan-a'),
-    drill('left', 'f-frida', 'f-frida-a'),
-    drill('down', 'f-waterloo-swedish', 'f-waterloo-swedish-a'),
-    drill('left', 'f-waterloo-battle', 'f-waterloo-battle-a'),
-    drill('right', 'f-tacom-agnetha', 'f-tacom-agnetha-a'),
+    quiz('left', 'f-unicef', 'f-unicef-a'),
+    quiz('down', 'f-broadway', 'f-broadway-a'),
+    quiz('up', 'f-meryl', 'f-meryl-a'),
+    quiz('left', 'f-benny-keys-2', 'f-benny-keys-a'),
+    quiz('right', 'f-farewell', 'f-farewell-a'),
+    quiz('up', 'f-brosnan', 'f-brosnan-a'),
+    quiz('left', 'f-frida', 'f-frida-a'),
+    quiz('down', 'f-waterloo-swedish', 'f-waterloo-swedish-a'),
+    quiz('left', 'f-waterloo-battle', 'f-waterloo-battle-a'),
+    quiz('right', 'f-tacom-agnetha', 'f-tacom-agnetha-a'),
   ];
 
   const buildRounds = () => [
@@ -981,14 +995,17 @@
   }
 
   /* ======================= game ======================= */
-  const state = { screen: 'intro', rounds: [], round: 0, idx: 0, awaiting: false, tries: 0, level: 0, near: 0, stats: {} };
-  const resetStats = () => { state.stats = {}; ALL.forEach(g => state.stats[g] = { att: 0, first: 0 }); state.near = 0; };
+  const state = { screen: 'intro', rounds: [], round: 0, idx: 0, awaiting: false, tries: 0, level: 0, near: 0, stats: {}, quiz: { asked: 0, right: 0 } };
+  const resetStats = () => { state.stats = {}; ALL.forEach(g => state.stats[g] = { att: 0, first: 0 });
+    state.near = 0; state.quiz = { asked: 0, right: 0 }; };
   const cur = () => state.rounds[state.round];
   const item = () => cur().items[state.idx];
   const GAP = [500, 420, 340, 240];
   const screens = { intro: $('#intro'), play: $('#play'), end: $('#end'), lines: $('#lines') };
   function show(name) { state.screen = name; Object.entries(screens).forEach(([k, el]) => el.hidden = k !== name); }
-  function unlock(gs) { document.querySelectorAll('[data-g]').forEach(el => el.classList.toggle('locked', !gs.includes(el.dataset.g))); }
+  // Replay is always available, so its hint is never dimmed.
+  function unlock(gs) { document.querySelectorAll('[data-g]').forEach(el =>
+    el.classList.toggle('locked', el.dataset.g !== 'doubletap' && !gs.includes(el.dataset.g))); }
 
   // iOS keeps speech locked until an utterance is spoken inside a real user
   // gesture, so spend a silent one on the tap that starts the game.
@@ -1045,13 +1062,29 @@
 
     if (g === 'diagonal') { state.near++; sfx.miss(); return respond(T(meta.axis === 'x' ? 'nudge-diagonal-x' : 'nudge-diagonal-y'), false); }
     if (g === 'short')    { state.near++; sfx.miss(); return respond(T('nudge-short'), false); }
-    if (g === 'tap') {
-      state.near++;
-      return respond(T(unlocked.includes('doubletap') ? 'nudge-tap-double' : 'nudge-tap-swipes'), false);
-    }
+    if (g === 'tap') { state.near++; return respond(T('nudge-tap-double'), false); }
+
+    // A double tap only ever means "say that again" — never an answer, never a
+    // mistake — so it works in every round, including before the game formally
+    // introduces it. The one exception is the drill that teaches the move.
+    if (g === 'doubletap' && !(it.type === 'drill' && it.answer === 'doubletap')) { say(it.line); return; }
+
     if (!unlocked.includes(g)) { state.near++; return respond([T(`locked-${g}`), r.hint], false); }
 
-    if (g === 'doubletap' && it.type !== 'drill') { say(it.line); return; } // replay, stay awaiting
+    if (it.type === 'quiz') {
+      // Which pair the question offers, read off its own answer: left/right is
+      // a yes-or-no, up/down is a true-or-false.
+      const yesNo = it.answer === 'left' || it.answer === 'right';
+      if (yesNo ? (g !== 'left' && g !== 'right') : (g !== 'up' && g !== 'down'))
+        return respond(T(yesNo ? 'quiz-pair-yesno' : 'quiz-pair-truefalse'), false);
+
+      state.quiz.asked++;
+      if (g === it.answer) { state.quiz.right++; sfx.good(); return respond([pick(praise), it.fact], true); }
+      // Say they got it wrong and give them the answer. Re-asking a yes/no you
+      // have just been told is wrong teaches nothing.
+      sfx.miss();
+      return respond([pick(quizWrong), it.fact], true);
+    }
 
     if (it.type === 'drill') {
       const s = state.stats[it.answer]; state.tries++;
@@ -1083,6 +1116,7 @@
         ? ` Strongest move: ${G[best.g].spoken}. One to practise: ${G[worst.g].spoken}.`
         : ' Every move as steady as the next. Take a bow.';
     }
+    if (state.quiz.asked) summary += ` ABBA questions: ${state.quiz.right} of ${state.quiz.asked} right.`;
     if (state.near) summary += ` ${state.near} near ${state.near === 1 ? 'miss' : 'misses'} along the way, and you fixed every one.`;
     $('#endSummary').textContent = summary;
 
@@ -1096,6 +1130,11 @@
       : ratio >= 0.35 ? T('end-band-ok')
       :                 T('end-band-learning'));
     if (ranked.length > 1) spoken.push(clearWorst ? T(`end-practise-${worst.g}`) : T('end-steady'));
+    if (state.quiz.asked) {
+      const qr = state.quiz.right / state.quiz.asked;
+      spoken.push(qr === 1 ? T('end-quiz-all') : qr >= 0.7 ? T('end-quiz-most')
+        : qr >= 0.4 ? T('end-quiz-some') : T('end-quiz-few'));
+    }
     if (state.near) spoken.push(T('end-fixed'));
     state.level = 0;
     await say(spoken);

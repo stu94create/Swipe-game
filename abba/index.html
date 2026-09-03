@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#150e33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Swiper Trouper</title>
+<style>
+  :root{
+    --ink:#150e33; --ink2:#3b2a7a; --gold:#f5c84c; --gold-dark:#b0771a;
+    --pink:#ff4f9a; --pink-dark:#c8237a; --cream:#fff5e0;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--cream);
+    background:var(--ink) radial-gradient(circle at 50% -20%, var(--ink2) 0, var(--ink) 60%) fixed;
+    font-family: ui-rounded,"Arial Rounded MT Bold","Helvetica Rounded","Nunito",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:var(--sequin,.4); transition:opacity 1.5s;
+    background-image:radial-gradient(circle, rgba(245,200,76,.9) 0 1.2px, transparent 1.7px);
+    background-size:22px 22px;
+    -webkit-mask-image:linear-gradient(#000 0%, transparent 75%); mask-image:linear-gradient(#000 0%, transparent 75%);
+  }
+  .screen{position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:max(20px, env(safe-area-inset-top)) 22px max(20px, env(safe-area-inset-bottom)); text-align:center; overflow:auto}
+  .screen[hidden]{display:none}
+  h1{margin:0 0 .3rem; font-size:clamp(2.6rem,13vw,4.6rem); line-height:.95; letter-spacing:-.02em; color:var(--gold);
+    text-shadow:0 3px 0 var(--gold-dark), 0 10px 26px rgba(255,79,154,.35)}
+  h2{margin:0 0 .4rem; font-size:clamp(1.9rem,8vw,2.8rem); color:var(--gold); line-height:1.05}
+  .kicker{margin:0 0 1.2rem; font-size:1.15rem; opacity:.85}
+  p{max-width:34ch; line-height:1.45}
+  .legend{list-style:none; padding:0; margin:0 0 1.2rem; font-size:1.05rem; line-height:1.7}
+  .legend b{color:var(--gold)}
+  button{
+    appearance:none; border:0; cursor:pointer; font:inherit; font-weight:700; font-size:1.2rem;
+    min-height:58px; padding:0 30px; border-radius:999px; color:var(--ink);
+    background:var(--gold); box-shadow:0 4px 0 var(--gold-dark); margin:6px;
+  }
+  button.quiet{background:transparent; color:var(--cream); box-shadow:inset 0 0 0 2px rgba(255,245,224,.45)}
+  button.small{min-height:44px; font-size:1rem; padding:0 18px}
+  button[aria-pressed="true"]{background:var(--pink); color:var(--cream); box-shadow:0 4px 0 var(--pink-dark)}
+  button:active{transform:translateY(2px)}
+  button:focus-visible,label:focus-within{outline:3px solid var(--cream); outline-offset:3px}
+  .toggle{display:inline-flex; align-items:center; gap:10px; font-size:1.05rem; margin:.3rem 0 .8rem}
+  .toggle input{width:26px;height:26px;accent-color:var(--pink)}
+  fieldset{border:0; padding:0; margin:0 0 .6rem}
+  legend{font-size:.95rem; opacity:.8; margin-bottom:.3rem}
+
+  #play{padding:0}
+  #stage{position:absolute; inset:0; touch-action:none; -webkit-user-select:none; user-select:none; cursor:grab}
+  #roundLabel{position:absolute; top:max(14px, env(safe-area-inset-top)); left:0; right:0; margin:0; font-size:1rem; color:var(--gold); opacity:.9}
+  .dir{position:absolute; font-size:1.05rem; font-weight:700; color:var(--cream); opacity:.9; transition:opacity .25s;
+    padding:8px 12px; border-radius:12px; background:rgba(21,14,51,.55)}
+  .dir.locked{opacity:.22}
+  .dir.up{top:calc(max(14px, env(safe-area-inset-top)) + 34px); left:50%; transform:translateX(-50%)}
+  .dir.down{bottom:calc(max(14px, env(safe-area-inset-bottom)) + 96px); left:50%; transform:translateX(-50%)}
+  .dir.left{left:12px; top:50%; transform:translateY(-50%)}
+  .dir.right{right:12px; top:50%; transform:translateY(-50%)}
+  .dir small{display:block; font-weight:400; font-size:.8rem; opacity:.8}
+  #card{
+    position:absolute; left:50%; top:50%; width:min(74vw,400px); min-height:40vh; max-height:56vh;
+    margin-left:calc(min(74vw,400px) / -2); margin-top:-20vh;
+    display:grid; place-items:center; padding:26px 22px; border-radius:30px;
+    background:linear-gradient(160deg, var(--pink), var(--pink-dark));
+    box-shadow:0 18px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.35);
+    transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  }
+  #card.drag{transition:none}
+  #qtext{margin:0; font-size:clamp(1.3rem,5.6vw,1.9rem); line-height:1.3; font-weight:700; color:var(--cream); max-width:100%}
+  #tapHint{position:absolute; left:50%; transform:translateX(-50%); top:calc(50% + 20vh + 14px); font-size:.9rem; opacity:.75; margin:0; white-space:nowrap}
+  #tapHint.locked{opacity:.2}
+  #feedback{position:absolute; left:16px; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); margin:0 auto; max-width:38ch;
+    min-height:3.3em; font-size:1.05rem; line-height:1.35; opacity:.92}
+  #quit{position:absolute; top:max(8px, env(safe-area-inset-top)); right:8px; min-height:40px; padding:0 14px; font-size:.9rem; margin:0}
+
+  .stats{list-style:none; padding:0; margin:0 0 1.2rem; text-align:left; min-width:min(80vw,320px); font-size:1.1rem}
+  .stats li{display:flex; justify-content:space-between; gap:16px; padding:8px 0; border-bottom:1px solid rgba(255,245,224,.15)}
+  .stats b{color:var(--gold)}
+  #lines{align-items:flex-start; text-align:left; justify-content:flex-start}
+  #lines ol{font-size:.95rem; line-height:1.5; padding-left:1.4em}
+  #lines code{color:var(--gold); font-size:.85em}
+
+  @media (prefers-reduced-motion: reduce){ #card{transition:none} body::before{transition:none} }
+</style>
+</head>
+<body>
+
+<main>
+  <section id="intro" class="screen">
+    <p class="kicker">An ABBA-flavoured swipe game</p>
+    <h1>Swiper Trouper</h1>
+    <p>A voice asks, you swipe. The swipe plays the band. Turn your sound up.</p>
+    <ul class="legend" aria-label="The five moves">
+      <li>Swipe <b>left</b> for yes</li>
+      <li>Swipe <b>right</b> for no</li>
+      <li>Swipe <b>up</b> if you love it</li>
+      <li>Swipe <b>down</b> if it's not for you</li>
+      <li><b>Double tap</b> to hear a question again</li>
+    </ul>
+    <label class="toggle"><input type="checkbox" id="musicOn" checked> Music on</label>
+    <div>
+      <button id="startBtn">Let's go</button>
+    </div>
+    <fieldset>
+      <legend>Or practise the moves</legend>
+      <div id="practicePick">
+        <button class="quiet small" data-p="all">All five</button>
+        <button class="quiet small" data-p="left">Left</button>
+        <button class="quiet small" data-p="right">Right</button>
+        <button class="quiet small" data-p="up">Up</button>
+        <button class="quiet small" data-p="down">Down</button>
+        <button class="quiet small" data-p="doubletap">Double tap</button>
+      </div>
+    </fieldset>
+  </section>
+
+  <section id="play" class="screen" hidden>
+    <div id="stage">
+      <p id="roundLabel"></p>
+      <button id="quit" class="quiet" aria-label="Back to start">Start over</button>
+      <div class="dir up" data-g="up">Love it <small>swipe up</small></div>
+      <div class="dir left" data-g="left">Yes <small>← swipe</small></div>
+      <div class="dir right" data-g="right">No <small>swipe →</small></div>
+      <div class="dir down" data-g="down">Not for me <small>swipe down</small></div>
+      <div id="card"><p id="qtext">…</p></div>
+      <p id="tapHint" data-g="doubletap">Tap twice to hear it again</p>
+      <p id="feedback" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section id="end" class="screen" hidden>
+    <p class="kicker">That's a wrap</p>
+    <h2>Thank you for the swipes</h2>
+    <p id="endSummary"></p>
+    <ul id="statsList" class="stats" aria-label="Your moves, first-time hits"></ul>
+    <div>
+      <button id="againBtn">Play again</button>
+      <button id="practiceBtn2" class="quiet">Practise the moves</button>
+    </div>
+  </section>
+
+  <section id="lines" class="screen" hidden>
+    <h2>Voice lines</h2>
+    <p>Every line the game can say, with the filename it will look for in the <code>voice/</code> folder. Generate a clip per line, name it as shown, and the game uses it automatically. Any line without a clip falls back to the built-in voice.</p>
+    <ol id="linesList"></ol>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const take = (a, n) => shuffle(a).slice(0, n);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  /* ======================= gestures ======================= */
+  const G = {
+    left:      { label: 'Yes',           spoken: 'a swipe left',  tip: 'start on the right side of the screen and flick towards the left edge' },
+    right:     { label: 'No',            spoken: 'a swipe right', tip: 'start on the left side and flick towards the right edge' },
+    up:        { label: 'Love it',       spoken: 'a swipe up',    tip: 'start low down and flick up towards the top of the screen' },
+    down:      { label: 'Not for me',    spoken: 'a swipe down',  tip: 'start high up and flick down towards the bottom' },
+    doubletap: { label: 'Play it again', spoken: 'a double tap',  tip: 'tap twice quickly in the same spot, like knocking on a door' },
+  };
+  const ALL = ['left', 'right', 'up', 'down', 'doubletap'];
+  const praise = ['Spot on.', 'Lovely.', "That's it.", 'Perfect swipe.', "You've got it.", 'Clean as you like.', 'Beautiful.'];
+  const ack = ['Noted.', 'Fair enough.', 'Good taste.', 'Fine by me.', 'Duly recorded.', 'I see.'];
+  const drillText = {
+    up: ['Swipe up!', 'Up you go!', 'Give me an up.', 'Straight up!'],
+    down: ['Swipe down!', 'Down!', 'Give me a down.', 'Straight down!'],
+    left: ['Swipe left!', 'Left!', 'Give me a left.', 'Over to the left!'],
+    right: ['Swipe right!', 'Right!', 'Give me a right.', 'Over to the right!'],
+    doubletap: ['Double tap!', 'Two quick taps!', 'Knock knock. Double tap.', 'Double tap, go!'],
+  };
+  const drill = (g, text, fact) => ({ type: 'drill', answer: g, text: text || pick(drillText[g]), fact });
+  const op = (text, react) => ({ type: 'opinion', text, react });
+
+  /* ======================= question pools ======================= */
+  // Round 1: yes / no only
+  const pool1 = [
+    op('Do you like ABBA?', { left: 'We are going to get along.', right: 'Brave. Very brave.' }),
+    op('Do you like the song Mamma Mia?'),
+    op('Have you seen the Mamma Mia film?'),
+    op('Would you go to an ABBA concert if you could?'),
+    op('Do you own an ABBA record, tape or CD?'),
+    op('Have you ever danced to ABBA at a wedding?', { left: 'Everyone has. It is the law.' }),
+    op('Do you sing along to ABBA in the car?'),
+    op('Do you know all the words to Waterloo?'),
+    op('Have you seen the Mamma Mia stage musical?'),
+    op('Do you own anything with sequins on it?', { left: 'Correct answer.' }),
+    op('Do you think ABBA should have kept going in the eighties?'),
+    op('Would you go to the ABBA Voyage show in London?'),
+    op('Have you ever dressed up as a member of ABBA?', { left: 'Photos, please.' }),
+    op('Are you a Eurovision fan?'),
+    op('Is Dancing Queen the best ABBA song?', { right: 'A bold position. Noted.' }),
+    drill('left', 'Quiz time. ABBA are from Sweden. Swipe left for yes if that is true.', 'Swedish through and through, from Stockholm.'),
+    drill('left', 'ABBA won Eurovision in 1974. Yes or no?', 'They did, in Brighton, with Waterloo.'),
+    drill('right', 'ABBA had five members. Yes or no?', 'Four. Agnetha, Björn, Benny and Anni-Frid.'),
+    drill('left', 'ABBA were two married couples. Yes or no?', 'They were, for a while.'),
+    drill('left', 'The greatest hits album ABBA Gold came out in 1992. Yes or no?', 'It did, and it has barely left the charts since.'),
+    drill('right', 'ABBA are from Norway. Yes or no?', 'Sweden. Do not let a Swede hear you say Norway.'),
+    drill('right', 'ABBA got into Eurovision on their first attempt, in 1973. Yes or no?', 'No. Ring Ring lost the Swedish selection. They came back the next year and won the lot.'),
+    drill('left', 'Benny is the one on the keyboards. Yes or no?', 'Benny on keys, Björn on guitar.'),
+    drill('left', 'Agnetha and Björn were married to each other. Yes or no?', 'They were. Benny and Anni-Frid were the other couple.'),
+    drill('left', 'The Mamma Mia film got a sequel. Yes or no?', 'Mamma Mia! Here We Go Again, in 2018.'),
+    drill('right', 'Fernando is a song about a cat. Yes or no?', 'It is not. Though it should be.'),
+    drill('left', "ABBA's manager was called Stig Anderson. Yes or no?", 'Stig, the fifth ABBA some would say.'),
+  ];
+  // Round 2: love it / yes / no / not for me
+  const songs = ['Dancing Queen', 'Fernando', 'Waterloo', 'Take a Chance on Me', 'The Winner Takes It All', 'Super Trouper', 'SOS',
+    'Gimme Gimme Gimme', 'Voulez-Vous', 'Knowing Me, Knowing You', 'Chiquitita', 'Money, Money, Money', 'The Name of the Game',
+    'Thank You for the Music', 'Does Your Mother Know', 'Lay All Your Love on Me', 'Angeleyes', 'Slipping Through My Fingers',
+    'One of Us', 'Head Over Heels', 'Honey, Honey', 'Ring Ring', 'Summer Night City', 'I Have a Dream', 'Eagle'];
+  const songReacts = {
+    'Dancing Queen': { up: 'The only correct answer, frankly.', down: 'I will pretend I did not hear that.' },
+    'The Winner Takes It All': { up: 'A weepy one. Good choice.' },
+    'Waterloo': { up: 'The one that started it all.' },
+    'Fernando': { down: 'Fernando is hurt.' },
+    'Money, Money, Money': { up: 'Very sensible.' },
+  };
+  const pool2 = [
+    ...songs.map(s => op(`${s}. Love it, yes, no, or not for you?`, songReacts[s])),
+    drill('up', "Quiz. The name ABBA comes from the first letters of the members' names. Swipe up for true, down for false.", 'Agnetha, Björn, Benny, Anni-Frid.'),
+    drill('up', 'ABBA released a comeback album called Voyage in 2021. Up for true, down for false.', 'Forty years after the last one.'),
+    drill('down', 'The ABBA Voyage concert with digital avatars is in Paris. Up for true, down for false.', 'It is in London, in a purpose-built arena.'),
+    drill('up', 'Agnetha was famously nervous of flying. Up for true, down for false.', 'She was. It made touring hard work.'),
+    drill('up', "The film Muriel's Wedding is full of ABBA songs. Up for true, down for false.", 'It is. Muriel is a superfan.'),
+    drill('up', 'Cher made a whole album of ABBA covers. Up for true, down for false.', 'She did, in 2018, after the Mamma Mia sequel.'),
+    drill('up', 'Björn and Benny wrote the musical Chess. Up for true, down for false.', 'With Tim Rice on words.'),
+    drill('down', 'ABBA reunited on stage to perform live at Eurovision 2024 in Sweden. Up for true, down for false.', 'They did not. Their avatars appeared, but the four stayed in the audience of history.'),
+    drill('up', 'The band name was picked through a newspaper competition. Up for true, down for false.', 'A Gothenburg paper ran a competition. ABBA won, not that there was much competition.'),
+    drill('up', 'There was already a Swedish fish company called Abba. Up for true, down for false.', 'A tinned fish firm. They kindly gave permission.'),
+    drill('down', 'Dancing Queen was released in 1986. Up for true, down for false.', '1976. Ten years earlier.'),
+  ];
+  // Round 3: all five, mixed
+  const pool3 = [
+    op('Here is one you can replay. Double tap to hear it again, or just answer. Do you like Chiquitita?'),
+    op('Super Trouper. Love it, yes, no, or not for you? Double tap to hear it again.'),
+    op('Would you rather hear Waterloo or Fernando right now? Swipe left for Waterloo, right for Fernando.'),
+    op('Voulez-Vous. Love it or not for you?'),
+    drill('left', 'Money from Chiquitita goes to UNICEF. Swipe left for yes if that is true.', 'It does, and has since 1979.'),
+    drill('down', 'The Mamma Mia musical first opened on Broadway. Swipe up for true, down for false.', 'It opened in London, in 1999.'),
+    drill('up', 'Meryl Streep starred in the Mamma Mia film. Up for true, down for false.', 'She did, in 2008.'),
+    drill('left', 'Benny is the one on the keyboards. Swipe left for yes, right for no.', 'Benny on keys, Björn on guitar.'),
+    drill('right', 'ABBA broke up with a big farewell concert. Swipe left for yes, right for no.', 'They never formally split. They just stopped, in 1982.'),
+    drill('up', 'Pierce Brosnan sings in the Mamma Mia film. Up for true, down for false.', 'He does. Opinions on it vary.'),
+    drill('left', 'Anni-Frid is often called Frida. Swipe left for yes, right for no.', 'Frida it is.'),
+    drill('down', 'ABBA sang Waterloo in Swedish at Eurovision. Up for true, down for false.', 'English. There is a Swedish version too.'),
+    drill('left', 'Waterloo is named after a battle. Left for yes, right for no.', 'Napoleon, 1815. Same result.'),
+    drill('right', 'Take a Chance on Me was written by Agnetha. Left for yes, right for no.', 'Benny and Björn wrote it, like nearly all of them.'),
+  ];
+
+  const buildRounds = () => [
+    { name: 'Round 1 · Waterloo', gestures: ['left', 'right'], level: 0,
+      hint: 'For now it is left for yes, right for no.',
+      intro: 'Round one. Waterloo. Just two moves to start. Swipe left for yes, swipe right for no. Your opinion, no wrong answers yet.',
+      items: take(pool1, 12) },
+    { name: 'Round 2 · Voulez-Vous', gestures: ['left', 'right', 'up', 'down'], level: 1,
+      hint: 'Left is yes, right is no, up is love it, down is not for me.',
+      intro: 'Round two. Voulez-Vous. Two new moves. Swipe up if you love something, swipe down if it is not for you.',
+      items: [drill('up', 'Let us try it. Swipe up.', 'That is love it.'), drill('down', 'Now swipe down.', 'That is not for me.'), ...take(pool2, 12)] },
+    { name: 'Round 3 · Ring Ring', gestures: ALL, level: 2,
+      hint: 'All five moves are in play.',
+      intro: 'Round three! Ring Ring. One last move. A double tap, two quick taps in the same spot, plays a question again.',
+      items: [drill('doubletap', 'Double tap now. Two quick taps.', 'That is how you hear a question again.'),
+        ...shuffle([...take(pool3, 10), drill('doubletap', 'Give me another double tap.'), drill('doubletap', 'Double tap!')])] },
+    { name: 'Round 4 · Dancing Queen', gestures: ALL, level: 3, crowd: true,
+      hint: 'All five moves are in play.',
+      intro: 'Last round! Dancing Queen! Everything at once, and quick about it. Do what the voice says!',
+      items: shuffle(['up', 'left', 'down', 'right', 'doubletap', 'up', 'right', 'down', 'left', 'doubletap', 'up', 'left', 'down', 'right']).map(g => drill(g)) },
+  ];
+  const practiceRounds = which => {
+    const gs = which === 'all' ? ALL : [which];
+    const seq = which === 'all' ? shuffle([...ALL, ...ALL, ...ALL]) : Array.from({ length: 15 }, () => which);
+    return [{ name: which === 'all' ? 'Practice · all five' : `Practice · ${G[which].spoken.replace(/^a /, '')}`, gestures: gs, level: 1,
+      hint: 'Practice mode.', intro: which === 'all' ? 'Practice time. All five moves are in play. Do what the voice says.' : `Practice time. Just ${G[which].spoken}, over and over, until it is automatic.`,
+      items: seq.map(g => drill(g)) }];
+  };
+
+  /* ======================= sound engine ======================= */
+  let ac, master;
+  const ctx = () => {
+    if (!ac) { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = 0.9; master.connect(ac.destination); }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  };
+  const out = (node, pan) => {
+    const a = ctx();
+    if (pan !== undefined && a.createStereoPanner) { const p = a.createStereoPanner(); p.pan.value = pan; node.connect(p); p.connect(master); }
+    else node.connect(master);
+  };
+  // piano-ish: two detuned oscillators, fast decay
+  function piano(freq, t, vel = 0.25, sour = 0) {
+    const a = ctx(), g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    [0, 0.6 + sour * 25].forEach((det, i) => { const o = a.createOscillator(); o.type = i ? 'sine' : 'triangle'; o.frequency.value = freq; o.detune.value = det; o.connect(g); o.start(t); o.stop(t + 1); });
+    out(g);
+  }
+  // plucked: sawtooth through a closing lowpass
+  function pluck(freq, t, pan = 0, vel = 0.22) {
+    const a = ctx(), o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+    o.type = 'sawtooth'; o.frequency.value = freq;
+    f.type = 'lowpass'; f.frequency.setValueAtTime(3200, t); f.frequency.exponentialRampToValueAtTime(300, t + 0.35); f.Q.value = 2;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(f); f.connect(g); out(g, pan); o.start(t); o.stop(t + 0.6);
+  }
+  function noiseBuf(sec) {
+    const a = ctx(), len = Math.floor(a.sampleRate * sec), b = a.createBuffer(1, len, a.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  }
+  function kick(t) {
+    const a = ctx(), o = a.createOscillator(), g = a.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.connect(g); out(g); o.start(t); o.stop(t + 0.35);
+  }
+  function snare(t) {
+    const a = ctx(), s = a.createBufferSource(); s.buffer = noiseBuf(0.25);
+    const f = a.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1500;
+    const g = a.createGain(); g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    s.connect(f); f.connect(g); out(g); s.start(t);
+    const o = a.createOscillator(), g2 = a.createGain(); o.frequency.value = 190; g2.gain.setValueAtTime(0.4, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.connect(g2); out(g2); o.start(t); o.stop(t + 0.12);
+  }
+  function chord(freqs, t, vel = 0.18, dur = 1.6) {
+    freqs.forEach((f, i) => { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + i * 0.08); g.gain.exponentialRampToValueAtTime(vel, t + i * 0.08 + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); out(g, (i / freqs.length) * 1.2 - 0.6); o.start(t + i * 0.08); o.stop(t + dur + 0.1); });
+  }
+  const sfx = {
+    good() { const t = ctx().currentTime; [880, 1109, 1319, 1760].forEach((f, i) => piano(f, t + i * 0.05, 0.14)); },
+    miss() { const t = ctx().currentTime; piano(196, t, 0.12, 1); piano(185, t + 0.14, 0.12, 1); },
+    // round sting: same shape, a step brighter each round
+    sting(level) { const t = ctx().currentTime, base = [261.6, 293.7, 329.6, 392][level] || 261.6;
+      chord([base, base * 1.25, base * 1.5, base * 2, base * 2.5].slice(0, 4 + Math.min(level, 1)), t, 0.16 + level * 0.02, 1.8);
+      if (level >= 2) { kick(t); snare(t + 0.16); kick(t + 0.32); snare(t + 0.48); } },
+    // crowd: shaped noise swell plus a few whoops
+    crowd(sec = 3.2) {
+      const a = ctx(), t = a.currentTime, s = a.createBufferSource(); s.buffer = noiseBuf(sec + 0.5); 
+      const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.5;
+      const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + sec * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + sec + 0.4);
+      s.connect(f); f.connect(g); out(g); s.start(t); s.stop(t + sec + 0.5);
+      for (let i = 0; i < 7; i++) { const o = a.createOscillator(), og = a.createGain(), st = t + sec * 0.35 + Math.random() * sec * 0.55, fr = 350 + Math.random() * 500;
+        o.type = 'sine'; o.frequency.setValueAtTime(fr, st); o.frequency.exponentialRampToValueAtTime(fr * 1.6, st + 0.25);
+        og.gain.setValueAtTime(0.0001, st); og.gain.exponentialRampToValueAtTime(0.07, st + 0.08); og.gain.exponentialRampToValueAtTime(0.0001, st + 0.35);
+        o.connect(og); out(og, Math.random() * 1.6 - 0.8); o.start(st); o.stop(st + 0.4); }
+    },
+    applause(sec = 3) {
+      const a = ctx(), t = a.currentTime;
+      for (let i = 0; i < sec * 22; i++) { const st = t + Math.random() * sec, s = a.createBufferSource(); s.buffer = noiseBuf(0.05);
+        const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1200 + Math.random() * 1800; f.Q.value = 1.2;
+        const g = a.createGain(); const env = Math.sin(Math.PI * ((st - t) / sec)); g.gain.setValueAtTime(0.12 * env, st); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.05);
+        s.connect(f); f.connect(g); out(g, Math.random() * 1.8 - 0.9); s.start(st); }
+    },
+  };
+
+  /* --- the instrument under your finger --- */
+  // pentatonic so any run sounds musical; index climbs with distance travelled
+  const scale = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3, 659.3, 784, 880, 1046.5, 1174.7, 1318.5, 1568];
+  const STEP = 22; // pixels per note
+  const finger = { travelled: 0, lastX: 0, lastY: 0, axis: null, lastT: 0 };
+  function fingerStart(x, y) { finger.travelled = 0; finger.lastX = x; finger.lastY = y; finger.axis = null; finger.lastT = performance.now(); }
+  function fingerMove(x, y, dx, dy) {
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (!finger.axis && Math.hypot(dx, dy) > 12) finger.axis = ax > ay ? 'x' : 'y';
+    if (!finger.axis) return;
+    const stepDx = x - finger.lastX, stepDy = y - finger.lastY;
+    finger.travelled += finger.axis === 'y' ? Math.abs(stepDy) : Math.abs(stepDx);
+    finger.lastX = x; finger.lastY = y;
+    while (finger.travelled >= STEP) {
+      finger.travelled -= STEP;
+      const now = performance.now(), speed = Math.min(1, 12 / Math.max(1, now - finger.lastT)); finger.lastT = now;
+      const dist = finger.axis === 'y' ? ay : ax, idx = Math.min(scale.length - 1, Math.floor(dist / STEP));
+      const sour = Math.min(ax, ay) / Math.max(ax, ay) > 0.58 ? 1 : 0; // wobbly swipes sound wobbly
+      const t = ctx().currentTime;
+      if (finger.axis === 'y') { const note = dy < 0 ? scale[idx] : scale[Math.max(0, scale.length - 1 - idx)]; piano(note, t, 0.16 + speed * 0.14, sour); }
+      else { const pan = Math.max(-1, Math.min(1, (x / innerWidth) * 2 - 1)); pluck(dx < 0 ? 196 * Math.pow(1.06, idx) : 330 * Math.pow(1.06, idx), t, pan, 0.14 + speed * 0.12); }
+    }
+  }
+
+  /* ======================= music ======================= */
+  // ONE track: audio/track.mp3, full disco, ideally around three minutes, loopable.
+  // It speeds up each round, and synthesised layers join on top: handclaps from round 2,
+  // shaker and tambourine from round 3, brass stabs on round 4.
+  const BPM = 120;                                  // set to your track's actual tempo
+  const RATE = [1, 1.04, 1.09, 1.15], VOL = 0.28, DUCK = 0.08;
+  const music = new Audio('audio/track.mp3');
+  music.loop = true; music.preload = 'auto'; music.volume = 0;
+  let ducked = false, playing = false;
+  const musicWanted = () => $('#musicOn').checked;
+  function fadeTo(el, target, ms) {
+    const start = el.volume, t0 = performance.now();
+    const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); el.volume = start + (target - start) * k; if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+
+  /* --- percussion layers, locked to the track's tempo as it speeds up --- */
+  let layerTimer = null, beat = 0, layerLevel = 0;
+  function clapHit(t, vel = 0.18) {
+    const a = ctx();
+    for (let i = 0; i < 3; i++) {   // three quick hits reads as a group of people, not one pair of hands
+      const s = a.createBufferSource(); s.buffer = noiseBuf(0.06);
+      const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1500 + i * 120; f.Q.value = 1.1;
+      const g = a.createGain(); const st = t + i * 0.011;
+      g.gain.setValueAtTime(vel, st); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.07);
+      s.connect(f); f.connect(g); out(g, i === 0 ? -0.3 : i === 2 ? 0.3 : 0); s.start(st);
+    }
+  }
+  function shaker(t, vel = 0.07) {
+    const a = ctx(), s = a.createBufferSource(); s.buffer = noiseBuf(0.05);
+    const f = a.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+    const g = a.createGain(); g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    s.connect(f); f.connect(g); out(g, 0.4); s.start(t);
+  }
+  function tambourine(t, vel = 0.1) {
+    const a = ctx(), s = a.createBufferSource(); s.buffer = noiseBuf(0.16);
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 8000; f.Q.value = 0.8;
+    const g = a.createGain(); g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    s.connect(f); f.connect(g); out(g, -0.45); s.start(t);
+  }
+  function brass(t, vel = 0.11) {
+    const a = ctx();
+    [392, 493.9, 587.3].forEach((fr, i) => {
+      const o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+      o.type = 'sawtooth'; o.frequency.value = fr;
+      f.type = 'lowpass'; f.frequency.setValueAtTime(900, t); f.frequency.linearRampToValueAtTime(2600, t + 0.06); f.frequency.linearRampToValueAtTime(1200, t + 0.3);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vel, t + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+      o.connect(f); f.connect(g); out(g, (i - 1) * 0.4); o.start(t); o.stop(t + 0.35);
+    });
+  }
+  function startLayers() {
+    stopLayers(); beat = 0;
+    const lv = v => v * (ducked ? 0.35 : 1);              // layers drop back while the voice is talking
+    const step = () => {
+      const t = ctx().currentTime, b = beat % 16, beatLen = 60 / BPM / (RATE[layerLevel] || 1);
+      if (layerLevel >= 1 && (b === 4 || b === 12)) clapHit(t, lv(0.18));                 // claps on the backbeat
+      if (layerLevel >= 2) { shaker(t + beatLen / 2, lv(0.06)); if (b % 4 === 2) tambourine(t, lv(0.1)); }
+      if (layerLevel >= 3 && (b === 0 || b === 14)) brass(t, lv(0.11));                   // stabs at the top of the bar
+      if (layerLevel >= 3 && b === 8) { clapHit(t, lv(0.12)); clapHit(t + 0.12, lv(0.12)); }
+      beat++;
+      layerTimer = setTimeout(step, beatLen * 1000);
+    };
+    // line the first hit up with the track's next beat, so the claps sit on the groove rather than beside it
+    const native = 60 / BPM, phase = music.currentTime % native, delay = (native - phase) / (music.playbackRate || 1);
+    layerTimer = setTimeout(step, delay * 1000);
+  }
+  function stopLayers() { if (layerTimer) { clearTimeout(layerTimer); clearInterval(layerTimer); layerTimer = null; } }
+
+  function setIntensity(level) {
+    layerLevel = level;
+    document.documentElement.style.setProperty('--sequin', 0.4 + level * 0.18);
+    if (!musicWanted()) { stopLayers(); return; }
+    music.playbackRate = RATE[level] || 1;
+    if (!playing) { playing = true; music.play().then(() => fadeTo(music, ducked ? DUCK : VOL, 1500)).catch(() => {}); }
+    if (level >= 1 && !layerTimer) startLayers();
+    if (level === 0) stopLayers();
+  }
+  function stopMusic() { music.pause(); music.currentTime = 0; music.volume = 0; playing = false; stopLayers(); layerLevel = 0; }
+  function duck(on) { ducked = on; if (playing && !music.paused) fadeTo(music, on ? DUCK : VOL, 250); }
+
+  /* ======================= voice ======================= */
+  // Any line with a matching clip at voice/<slug>.mp3 is played from file (ElevenLabs etc.); otherwise system speech.
+  const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70);
+  const missing = new Set();
+  let voice = null;
+  function pickVoice() {
+    const vs = speechSynthesis.getVoices(); if (!vs.length) return;
+    voice = vs.find(v => /en-IE/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang) && /Daniel|Kate|Serena|Stephanie|Google UK/i.test(v.name))
+      || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || vs[0];
+  }
+  if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
+  const feedback = $('#feedback');
+  let sayToken = 0, clipPlaying = null;
+  function speakOne(text, rate) {
+    return new Promise(res => {
+      const file = `voice/${slug(text)}.mp3`;
+      if (!missing.has(file)) {
+        const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
+        a.addEventListener('ended', () => res()); a.addEventListener('error', () => { missing.add(file); clipPlaying = null; speakTts(text, rate).then(res); });
+        a.play().catch(() => { missing.add(file); clipPlaying = null; speakTts(text, rate).then(res); });
+        return;
+      }
+      speakTts(text, rate).then(res);
+    });
+  }
+  function speakTts(text, rate) {
+    return new Promise(res => {
+      if (!('speechSynthesis' in window)) return setTimeout(res, 500 + text.length * 40);
+      const u = new SpeechSynthesisUtterance(text); if (voice) u.voice = voice; u.rate = rate; u.pitch = 1.05;
+      let done = false; const fin = () => { if (!done) { done = true; res(); } };
+      u.onend = fin; u.onerror = fin; setTimeout(fin, 900 + text.length * 80);
+      speechSynthesis.speak(u);
+    });
+  }
+  function stopVoice() { speechSynthesis?.cancel(); if (clipPlaying) { clipPlaying.pause(); clipPlaying = null; } }
+  async function say(parts) {
+    parts = [].concat(parts).filter(Boolean);
+    const my = ++sayToken; stopVoice();
+    feedback.textContent = parts.join(' ');
+    duck(true);
+    const rate = [1, 1.03, 1.07, 1.13][state.level] || 1;
+    for (const p of parts) { if (my !== sayToken) break; await speakOne(p, rate); }
+    if (my === sayToken) duck(false);
+    return my === sayToken;
+  }
+
+  /* ======================= game ======================= */
+  const state = { screen: 'intro', rounds: [], round: 0, idx: 0, awaiting: false, tries: 0, level: 0, near: 0, stats: {} };
+  const resetStats = () => { state.stats = {}; ALL.forEach(g => state.stats[g] = { att: 0, first: 0 }); state.near = 0; };
+  const cur = () => state.rounds[state.round];
+  const item = () => cur().items[state.idx];
+  const GAP = [500, 420, 340, 240];
+  const screens = { intro: $('#intro'), play: $('#play'), end: $('#end'), lines: $('#lines') };
+  function show(name) { state.screen = name; Object.entries(screens).forEach(([k, el]) => el.hidden = k !== name); }
+  function unlock(gs) { document.querySelectorAll('[data-g]').forEach(el => el.classList.toggle('locked', !gs.includes(el.dataset.g))); }
+
+  async function begin(roundSet, welcome) {
+    state.rounds = roundSet; state.round = 0; state.idx = 0; resetStats();
+    ctx(); show('play'); $('#qtext').textContent = '…';
+    setIntensity(roundSet[0].level);
+    const ok = await say(welcome); if (!ok) return;
+    startRound();
+  }
+  async function startRound() {
+    const r = cur(); state.level = r.level; state.idx = 0;
+    $('#roundLabel').textContent = r.name; unlock(r.gestures); $('#qtext').textContent = r.name;
+    if (r.crowd) { sfx.crowd(3.2); await wait(2600); if (state.screen !== 'play') return; }
+    setIntensity(r.level); sfx.sting(r.level);
+    await wait(r.level >= 2 ? 900 : 700);
+    const ok = await say(r.intro); if (!ok) return;
+    present();
+  }
+  function present() {
+    const it = item(); state.tries = 0; state.awaiting = true;
+    $('#qtext').textContent = it.text;
+    say(it.text); // not awaited: a confident player can answer while it's still talking
+  }
+  function next() {
+    state.idx++;
+    if (state.idx >= cur().items.length) { state.round++; if (state.round >= state.rounds.length) return finish(); return startRound(); }
+    present();
+  }
+  function respond(parts, advance) {
+    state.awaiting = false;
+    say(parts).then(ok => { if (!ok) return; if (advance) setTimeout(next, GAP[state.level] || 400); else state.awaiting = true; });
+  }
+
+  function onGesture(g, meta = {}) {
+    if (state.screen !== 'play' || !state.awaiting) return;
+    const r = cur(), it = item(), unlocked = r.gestures;
+
+    if (g === 'diagonal') { state.near++; sfx.miss(); return respond(`That was a bit diagonal. Keep it straight ${meta.axis === 'x' ? 'across' : 'up and down'}, like drawing a line.`, false); }
+    if (g === 'short')    { state.near++; sfx.miss(); return respond('That swipe was a bit short. Make it a bigger flick, right across the screen.', false); }
+    if (g === 'tap') {
+      state.near++;
+      return respond(unlocked.includes('doubletap')
+        ? 'That was one tap. For a double tap, tap twice quickly in the same spot.'
+        : 'That was a tap. This round is swipes only. Flick your finger across the screen.', false);
+    }
+    if (!unlocked.includes(g)) { state.near++; return respond([`That is ${G[g].spoken}. It comes in later.`, r.hint], false); }
+
+    if (g === 'doubletap' && it.type !== 'drill') { say(it.text); return; } // replay, stay awaiting
+
+    if (it.type === 'drill') {
+      const s = state.stats[it.answer]; state.tries++;
+      if (state.tries === 1) s.att++;
+      if (g === it.answer) {
+        if (state.tries === 1) s.first++;
+        sfx.good();
+        return respond([pick(praise), it.fact], true);
+      }
+      sfx.miss();
+      return respond(`That came through as ${G[g].spoken}. For ${G[it.answer].spoken}, ${G[it.answer].tip}.`, false);
+    }
+    respond([`${G[g].label}.`, it.react?.[g] || pick(ack)], true);
+  }
+
+  async function finish() {
+    show('end'); sfx.applause(3);
+    const rows = ALL.map(g => ({ g, ...state.stats[g] })).filter(x => x.att > 0);
+    const total = rows.reduce((a, x) => a + x.att, 0), hits = rows.reduce((a, x) => a + x.first, 0);
+    const list = $('#statsList'); list.innerHTML = '';
+    rows.forEach(x => { const li = document.createElement('li'); li.innerHTML = `<span>${G[x.g].spoken.replace(/^a /, '').replace(/^\w/, c => c.toUpperCase())}</span><b>${x.first} of ${x.att}</b>`; list.appendChild(li); });
+    let summary = `You landed ${hits} of ${total} moves first time.`;
+    const ranked = rows.filter(x => x.att > 1).sort((a, b) => b.first / b.att - a.first / a.att);
+    if (ranked.length > 1) {
+      const best = ranked[0], worst = ranked[ranked.length - 1];
+      summary += best.first / best.att > worst.first / worst.att
+        ? ` Strongest move: ${G[best.g].spoken}. One to practise: ${G[worst.g].spoken}.`
+        : ' Every move as steady as the next. Take a bow.';
+    }
+    if (state.near) summary += ` ${state.near} near ${state.near === 1 ? 'miss' : 'misses'} along the way, and you fixed every one.`;
+    $('#endSummary').textContent = summary;
+    state.level = 0;
+    await say(["That's a wrap. Thank you for the swipes.", summary]);
+  }
+
+  /* ======================= pointer engine ======================= */
+  const stage = $('#stage'), card = $('#card');
+  let p = null, lastTap = 0, tapTimer = null;
+  stage.addEventListener('pointerdown', e => {
+    if (state.screen !== 'play' || e.target.closest('button')) return;
+    p = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+    card.classList.add('drag'); fingerStart(e.clientX, e.clientY); ctx();
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!p || e.pointerId !== p.id) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    card.style.transform = `translate(${dx * 0.6}px, ${dy * 0.6}px) rotate(${dx * 0.04}deg)`;
+    fingerMove(e.clientX, e.clientY, dx, dy);
+  });
+  const endDrag = () => { card.classList.remove('drag'); card.style.transform = ''; };
+  stage.addEventListener('pointerup', e => {
+    if (!p || e.pointerId !== p.id) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; p = null; endDrag(); classify(dx, dy);
+  });
+  stage.addEventListener('pointercancel', () => { p = null; endDrag(); });
+
+  function classify(dx, dy) {
+    const dist = Math.hypot(dx, dy), now = performance.now(), t = ctx().currentTime;
+    if (dist < 14) {
+      clearTimeout(tapTimer);
+      if (now - lastTap < 380) { lastTap = 0; snare(t); onGesture('doubletap'); }      // kick… snare!
+      else { lastTap = now; kick(t); tapTimer = setTimeout(() => { lastTap = 0; onGesture('tap'); }, 400); } // lonely kick
+      return;
+    }
+    lastTap = 0; clearTimeout(tapTimer);
+    if (dist < 50) return onGesture('short');
+    const ax = Math.abs(dx), ay = Math.abs(dy), ratio = Math.min(ax, ay) / Math.max(ax, ay);
+    if (ratio > 0.58) return onGesture('diagonal', { axis: ax > ay ? 'x' : 'y' });
+    if (ax > ay) onGesture(dx < 0 ? 'left' : 'right'); else onGesture(dy < 0 ? 'up' : 'down');
+  }
+
+  // keyboard for desktop testing: arrows swipe (with a quick run of notes), Enter or Space double taps
+  document.addEventListener('keydown', e => {
+    if (state.screen !== 'play') return;
+    const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'doubletap', ' ': 'doubletap' };
+    const g = map[e.key]; if (!g) return; e.preventDefault();
+    const t = ctx().currentTime;
+    if (g === 'up') [0, 2, 4, 6].forEach((i, k) => piano(scale[i], t + k * 0.05, 0.2));
+    else if (g === 'down') [6, 4, 2, 0].forEach((i, k) => piano(scale[i], t + k * 0.05, 0.2));
+    else if (g === 'left') [0, 1, 2, 3].forEach(k => pluck(196 * Math.pow(1.06, k), t + k * 0.05, -0.9));
+    else if (g === 'right') [0, 1, 2, 3].forEach(k => pluck(330 * Math.pow(1.06, k), t + k * 0.05, 0.9));
+    else { kick(t); snare(t + 0.15); }
+    onGesture(g);
+  });
+
+  /* ======================= buttons ======================= */
+  $('#startBtn').addEventListener('click', () => begin(buildRounds(), 'Welcome to Swiper Trouper.'));
+  $('#practicePick').addEventListener('click', e => { const b = e.target.closest('button'); if (b) begin(practiceRounds(b.dataset.p), 'Practice it is.'); });
+  $('#againBtn').addEventListener('click', () => begin(buildRounds(), 'Here we go again.'));
+  $('#practiceBtn2').addEventListener('click', () => begin(practiceRounds('all'), 'Practice it is.'));
+  $('#quit').addEventListener('click', () => { sayToken++; stopVoice(); stopMusic(); state.awaiting = false; state.level = 0; document.documentElement.style.setProperty('--sequin', 0.4); show('intro'); });
+
+  /* ======================= voice line list (open index.html#lines) ======================= */
+  if (location.hash === '#lines') {
+    const lines = new Set(['Welcome to Swiper Trouper.', 'Here we go again.', 'Practice it is.', "That's a wrap. Thank you for the swipes.",
+      ...praise, ...ack, ...Object.values(drillText).flat(),
+      'Let us try it. Swipe up.', 'That is love it.', 'Now swipe down.', 'That is not for me.', 'Double tap now. Two quick taps.', 'That is how you hear a question again.', 'Give me another double tap.',
+      'That swipe was a bit short. Make it a bigger flick, right across the screen.',
+      'That was one tap. For a double tap, tap twice quickly in the same spot.',
+      'That was a tap. This round is swipes only. Flick your finger across the screen.',
+      'That was a bit diagonal. Keep it straight across, like drawing a line.', 'That was a bit diagonal. Keep it straight up and down, like drawing a line.']);
+    buildRounds().forEach(r => { lines.add(r.intro); lines.add(r.hint); });
+    ALL.forEach(g => { lines.add(`${G[g].label}.`); lines.add(`That is ${G[g].spoken}. It comes in later.`);
+      ALL.forEach(w => { if (w !== g) lines.add(`That came through as ${G[g].spoken}. For ${G[w].spoken}, ${G[w].tip}.`); }); });
+    [...pool1, ...pool2, ...pool3].forEach(q => { lines.add(q.text); if (q.fact) lines.add(q.fact); if (q.react) Object.values(q.react).forEach(v => lines.add(v)); });
+    const ol = $('#linesList');
+    [...lines].forEach(l => { const li = document.createElement('li'); li.innerHTML = `${l}<br><code>voice/${slug(l)}.mp3</code>`; ol.appendChild(li); });
+    show('lines');
+  }
+})();
+</script>
+</body>
+</html>

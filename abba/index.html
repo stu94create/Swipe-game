@@ -837,6 +837,8 @@
   let cacheBytes = 0;
   const sizeOf = buf => buf.length * buf.numberOfChannels * 4;
   function cachePut(file, buf) {
+    const had = clipCache.get(file);
+    if (had) cacheBytes -= sizeOf(had);          // a re-put must not be counted twice
     clipCache.set(file, buf); cacheBytes += sizeOf(buf);
     for (const [k, v] of clipCache) {
       if (cacheBytes <= CACHE_BYTES) break;
@@ -853,9 +855,19 @@
     const p = ac.decodeAudioData(data, ok, no);          // Safari wants the callbacks
     if (p && p.then) p.then(ok, no);
   });
-  async function loadClip(file) {
+  const inFlight = new Map();
+  function loadClip(file) {
     const hit = cacheGet(file);
-    if (hit) return hit;
+    if (hit) return Promise.resolve(hit);
+    // A prefetch and the line that needs it can ask at the same moment; one
+    // fetch, one decode, one entry.
+    const running = inFlight.get(file);
+    if (running) return running;
+    const p = fetchClip(file).finally(() => inFlight.delete(file));
+    inFlight.set(file, p);
+    return p;
+  }
+  async function fetchClip(file) {
     let last;
     for (let attempt = 0; attempt < 2; attempt++) {   // one retry: phones drop requests
       try {
@@ -877,6 +889,7 @@
   // to cost that line its voice for the rest of the game; fetching ahead, off
   // the critical path, means a blip has time to be retried before she speaks.
   function prefetch(lines) {
+    if (!voiceRouted) return;    // the element path never reads the cache
     let i = 0;
     const pump = () => {
       while (i < lines.length) {
@@ -911,6 +924,9 @@
       }).catch(err => {
         // Only write a clip off when the server says it is genuinely not there.
         if (err && err.absent) missing.add(file);
+        // If the player has already answered or quit, the line is abandoned:
+        // reading it out in the browser voice would talk over what came next.
+        if (token !== sayToken) return res();
         speakTts(line.t, rate).then(res);
       });
     });
@@ -921,16 +937,19 @@
   function playClipElement(file, line, rate, token, res) {
     const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
     let fellBack = false;
+    // A stalled element fires neither ended nor error, which would leave the
+    // game waiting on this question for ever.
+    const guard = setTimeout(() => { if (!fellBack) { fellBack = true; clipPlaying = null; res(); } }, 20000);
     const fallback = err => {
       if (fellBack) return;
       fellBack = true;
-      clipPlaying = null;
+      clearTimeout(guard); clipPlaying = null;
       // Answering early aborts playback; that is not a missing clip.
       if (token !== sayToken || (err && err.name === 'AbortError')) return res();
       missing.add(file);
       speakTts(line.t, rate).then(res);
     };
-    a.addEventListener('ended', () => res());
+    a.addEventListener('ended', () => { clearTimeout(guard); res(); });
     a.addEventListener('error', () => fallback());
     a.play().catch(fallback);
   }

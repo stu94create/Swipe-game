@@ -26,6 +26,7 @@ const src = readFileSync(SRC, 'utf8');
 const open = src.indexOf('const LINES = {');
 if (open === -1) throw new Error('LINES registry not found in abba/index.html');
 const close = src.indexOf('\n  };', open);
+if (close === -1) throw new Error('LINES registry has no closing brace at the expected indent');
 const literal = src.slice(src.indexOf('{', open), close + 4).replace(/;\s*$/, '');
 const LINES = runInNewContext('(' + literal + ')');
 

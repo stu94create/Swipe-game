@@ -34,22 +34,24 @@
   h2{margin:0 0 .4rem; font-size:clamp(1.9rem,8vw,2.8rem); color:var(--gold); line-height:1.05}
   .kicker{margin:0 0 1.2rem; font-size:1.15rem; opacity:.85}
   p{max-width:34ch; line-height:1.45}
-  .legend{list-style:none; padding:0; margin:0 0 1.2rem; font-size:1.05rem; line-height:1.7}
-  .legend b{color:var(--gold)}
   button{
     appearance:none; border:0; cursor:pointer; font:inherit; font-weight:700; font-size:1.2rem;
     min-height:58px; padding:0 30px; border-radius:999px; color:var(--ink);
     background:var(--gold); box-shadow:0 4px 0 var(--gold-dark); margin:6px;
   }
   button.quiet{background:transparent; color:var(--cream); box-shadow:inset 0 0 0 2px rgba(255,245,224,.45)}
-  button.small{min-height:44px; font-size:1rem; padding:0 18px}
-  button[aria-pressed="true"]{background:var(--pink); color:var(--cream); box-shadow:0 4px 0 var(--pink-dark)}
   button:active{transform:translateY(2px)}
   button:focus-visible,label:focus-within{outline:3px solid var(--cream); outline-offset:3px}
-  .toggle{display:inline-flex; align-items:center; gap:10px; font-size:1.05rem; margin:.3rem 0 .8rem}
-  .toggle input{width:26px;height:26px;accent-color:var(--pink)}
-  fieldset{border:0; padding:0; margin:0 0 .6rem}
-  legend{font-size:.95rem; opacity:.8; margin-bottom:.3rem}
+  /* Start screen: the whole thing is the button. "Begin" is a painted label,
+     not a control, so there is nothing for a screen reader to announce over
+     the game's own voice. */
+  #intro{cursor:pointer}
+  .begin{display:inline-flex; align-items:center; justify-content:center; min-height:58px; padding:0 34px;
+    margin:1.5rem 0 0; border-radius:999px; font-size:1.2rem; font-weight:700;
+    color:var(--ink); background:var(--gold); box-shadow:0 4px 0 var(--gold-dark);
+    animation:breathe 2.6s ease-in-out infinite}
+  @keyframes breathe{50%{transform:translateY(-3px); box-shadow:0 7px 0 var(--gold-dark)}}
+  .start-note{max-width:32ch; margin:1.4rem 0 0; font-size:1rem; line-height:1.5; opacity:.78}
 
   #play{padding:0}
   #stage{position:absolute; inset:0; touch-action:none; -webkit-user-select:none; user-select:none; cursor:grab}
@@ -77,6 +79,7 @@
   #feedback{position:absolute; left:16px; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); margin:0 auto; max-width:38ch;
     min-height:3.3em; font-size:1.05rem; line-height:1.35; opacity:.92}
   #quit{position:absolute; top:max(8px, env(safe-area-inset-top)); right:8px; min-height:40px; padding:0 14px; font-size:.9rem; margin:0}
+  #musicBtn{position:absolute; top:max(8px, env(safe-area-inset-top)); left:8px; min-height:40px; padding:0 14px; font-size:.9rem; margin:0}
 
   .stats{list-style:none; padding:0; margin:0 0 1.2rem; text-align:left; min-width:min(80vw,320px); font-size:1.1rem}
   .stats li{display:flex; justify-content:space-between; gap:16px; padding:8px 0; border-bottom:1px solid rgba(255,245,224,.15)}
@@ -85,7 +88,7 @@
   #lines ol{font-size:.95rem; line-height:1.5; padding-left:1.4em}
   #lines code{color:var(--gold); font-size:.85em}
 
-  @media (prefers-reduced-motion: reduce){ #card{transition:none} body::before{transition:none} }
+  @media (prefers-reduced-motion: reduce){ #card{transition:none} body::before{transition:none} .begin{animation:none} }
 </style>
 </head>
 <body>
@@ -94,42 +97,25 @@
   <section id="intro" class="screen">
     <p class="kicker">An ABBA-flavoured swipe game</p>
     <h1>Swiper Trouper</h1>
-    <p>A voice asks, you swipe. The swipe plays the band. Turn your sound up.</p>
-    <ul class="legend" aria-label="The five moves">
-      <li>Swipe <b>left</b> for yes</li>
-      <li>Swipe <b>right</b> for no</li>
-      <li>Swipe <b>up</b> if you love it</li>
-      <li>Swipe <b>down</b> if it's not for you</li>
-      <li><b>Double tap</b> to hear a question again</li>
-    </ul>
-    <label class="toggle"><input type="checkbox" id="musicOn" checked> Music on</label>
-    <div>
-      <button id="startBtn">Let's go</button>
-    </div>
-    <fieldset>
-      <legend>Or practise the moves</legend>
-      <div id="practicePick">
-        <button class="quiet small" data-p="all">All five</button>
-        <button class="quiet small" data-p="left">Left</button>
-        <button class="quiet small" data-p="right">Right</button>
-        <button class="quiet small" data-p="up">Up</button>
-        <button class="quiet small" data-p="down">Down</button>
-        <button class="quiet small" data-p="doubletap">Double tap</button>
-      </div>
-    </fieldset>
+    <div class="begin">Begin</div>
+    <p class="start-note">
+      Best with VoiceOver turned off &mdash; the game speaks to you.
+      Tap anywhere on the screen to begin, then follow the voice. Sound up.
+    </p>
   </section>
 
   <section id="play" class="screen" hidden>
     <div id="stage">
       <p id="roundLabel"></p>
-      <button id="quit" class="quiet" aria-label="Back to start">Start over</button>
+      <button id="musicBtn" class="quiet">Music on</button>
+      <button id="quit" class="quiet">Start over</button>
       <div class="dir up" data-g="up">Love it <small>swipe up</small></div>
       <div class="dir left" data-g="left">Yes <small>← swipe</small></div>
       <div class="dir right" data-g="right">No <small>swipe →</small></div>
       <div class="dir down" data-g="down">Not for me <small>swipe down</small></div>
       <div id="card"><p id="qtext">…</p></div>
       <p id="tapHint" data-g="doubletap">Tap twice to hear it again</p>
-      <p id="feedback" role="status" aria-live="polite"></p>
+      <p id="feedback"></p>
     </div>
   </section>
 
@@ -137,7 +123,7 @@
     <p class="kicker">That's a wrap</p>
     <h2>Thank you for the swipes</h2>
     <p id="endSummary"></p>
-    <ul id="statsList" class="stats" aria-label="Your moves, first-time hits"></ul>
+    <ul id="statsList" class="stats"></ul>
     <div>
       <button id="againBtn">Play again</button>
       <button id="practiceBtn2" class="quiet">Practise the moves</button>
@@ -392,8 +378,8 @@
   const RATE = [1, 1.04, 1.09, 1.15], VOL = 0.28, DUCK = 0.08;
   const music = new Audio('audio/track.mp3');
   music.loop = true; music.preload = 'auto'; music.volume = 0;
-  let ducked = false, playing = false;
-  const musicWanted = () => $('#musicOn').checked;
+  let ducked = false, playing = false, musicEnabled = true;
+  const musicWanted = () => musicEnabled;
   function fadeTo(el, target, ms) {
     const start = el.volume, t0 = performance.now();
     const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); el.volume = start + (target - start) * k; if (k < 1) requestAnimationFrame(step); };
@@ -520,9 +506,16 @@
   function show(name) { state.screen = name; Object.entries(screens).forEach(([k, el]) => el.hidden = k !== name); }
   function unlock(gs) { document.querySelectorAll('[data-g]').forEach(el => el.classList.toggle('locked', !gs.includes(el.dataset.g))); }
 
+  // iOS keeps speech locked until an utterance is spoken inside a real user
+  // gesture, so spend a silent one on the tap that starts the game.
+  function warmSpeech() {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u);
+  }
+
   async function begin(roundSet, welcome) {
     state.rounds = roundSet; state.round = 0; state.idx = 0; resetStats();
-    ctx(); show('play'); $('#qtext').textContent = '…';
+    ctx(); warmSpeech(); show('play'); $('#qtext').textContent = '…';
     setIntensity(roundSet[0].level);
     const ok = await say(welcome); if (!ok) return;
     startRound();
@@ -640,6 +633,7 @@
 
   // keyboard for desktop testing: arrows swipe (with a quick run of notes), Enter or Space double taps
   document.addEventListener('keydown', e => {
+    if (state.screen === 'intro') { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startGame(); } return; }
     if (state.screen !== 'play') return;
     const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'doubletap', ' ': 'doubletap' };
     const g = map[e.key]; if (!g) return; e.preventDefault();
@@ -653,8 +647,18 @@
   });
 
   /* ======================= buttons ======================= */
-  $('#startBtn').addEventListener('click', () => begin(buildRounds(), 'Welcome to Swiper Trouper.'));
-  $('#practicePick').addEventListener('click', e => { const b = e.target.closest('button'); if (b) begin(practiceRounds(b.dataset.p), 'Practice it is.'); });
+  // Tap anywhere on the start screen, exactly like Ballycrann. Not {once:true}:
+  // "Start over" brings the player back here and the screen must arm again.
+  function startGame() { if (state.screen === 'intro') begin(buildRounds(), 'Welcome to Swiper Trouper.'); }
+  $('#intro').addEventListener('click', startGame);
+
+  const musicBtn = $('#musicBtn');
+  musicBtn.addEventListener('click', () => {
+    musicEnabled = !musicEnabled;
+    musicBtn.textContent = musicEnabled ? 'Music on' : 'Music off';
+    if (musicEnabled) setIntensity(state.level); else stopMusic();
+  });
+
   $('#againBtn').addEventListener('click', () => begin(buildRounds(), 'Here we go again.'));
   $('#practiceBtn2').addEventListener('click', () => begin(practiceRounds('all'), 'Practice it is.'));
   $('#quit').addEventListener('click', () => { sayToken++; stopVoice(); stopMusic(); state.awaiting = false; state.level = 0; document.documentElement.style.setProperty('--sequin', 0.4); show('intro'); });

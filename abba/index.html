@@ -142,6 +142,17 @@
   const $ = s => document.querySelector(s);
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const pick = a => a[Math.floor(Math.random() * a.length)];
+  // Never the same quip twice running — a repeat is what makes a stock line
+  // sound like a stock line.
+  const lastPick = new WeakMap();
+  const pickFresh = a => {
+    if (a.length < 2) return a[0];
+    const prev = lastPick.get(a);
+    const from = prev === undefined ? a : a.filter(x => x !== prev);
+    const v = pick(from.length ? from : a);
+    lastPick.set(a, v);
+    return v;
+  };
   const take = (a, n) => shuffle(a).slice(0, n);
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -253,6 +264,16 @@
     'quiz-wrong-1': 'Not quite.',
     'quiz-wrong-2': 'Afraid not.',
     'quiz-wrong-3': 'Good guess, but no.',
+    'quiz-wrong-4': 'No. But said with such confidence.',
+    'quiz-wrong-5': 'Wrong, and briskly wrong at that.',
+    'quiz-wrong-6': 'That is a no from me, and a no from Björn.',
+    'quiz-wrong-7': 'Nope. Agnetha is shaking her head.',
+    'quiz-wrong-8': 'Not even close. Lovely swipe, mind you.',
+    'quiz-wrong-9': 'No. We will keep that one between ourselves.',
+    'quiz-wrong-10': 'Wrong. Somewhere a sequin has fallen off.',
+    'quiz-wrong-11': 'No, but I admire the commitment.',
+    'quiz-wrong-12': 'Incorrect. Benny is disappointed, but supportive.',
+    'quiz-wrong-13': 'No. Back to the box set with you.',
     'quiz-pair-yesno': 'That one is a yes or no. Swipe left for yes, right for no.',
     'quiz-pair-truefalse': 'That one is true or false. Swipe up for true, down for false.',
     'end-quiz-all': 'And you got every ABBA question right. Encyclopaedic.',
@@ -478,7 +499,9 @@
   // getting it wrong is a fact to correct, not a technique to fix.
   const drill = (g, id, factId) => ({ type: 'drill', answer: g, line: id ? T(id) : pick(drillText[g]), fact: factId ? T(factId) : null });
   const quiz = (g, id, factId) => ({ type: 'quiz', answer: g, line: T(id), fact: factId ? T(factId) : null });
-  const quizWrong = ['quiz-wrong-1', 'quiz-wrong-2', 'quiz-wrong-3'].map(T);
+  const quizWrong = ['quiz-wrong-1', 'quiz-wrong-2', 'quiz-wrong-3', 'quiz-wrong-4', 'quiz-wrong-5',
+    'quiz-wrong-6', 'quiz-wrong-7', 'quiz-wrong-8', 'quiz-wrong-9', 'quiz-wrong-10',
+    'quiz-wrong-11', 'quiz-wrong-12', 'quiz-wrong-13'].map(T);
   const op = (id, react) => ({ type: 'opinion', line: T(id),
     react: react ? Object.fromEntries(Object.entries(react).map(([k, v]) => [k, T(v)])) : null });
 
@@ -1108,11 +1131,11 @@
         return respond(T(yesNo ? 'quiz-pair-yesno' : 'quiz-pair-truefalse'), false);
 
       state.quiz.asked++;
-      if (g === it.answer) { state.quiz.right++; sfx.good(); return respond([pick(praise), it.fact], true); }
+      if (g === it.answer) { state.quiz.right++; sfx.good(); return respond([pickFresh(praise), it.fact], true); }
       // Say they got it wrong and give them the answer. Re-asking a yes/no you
       // have just been told is wrong teaches nothing.
       sfx.miss();
-      return respond([pick(quizWrong), it.fact], true);
+      return respond([pickFresh(quizWrong), it.fact], true);
     }
 
     if (it.type === 'drill') {
@@ -1121,13 +1144,13 @@
       if (g === it.answer) {
         if (state.tries === 1) s.first++;
         sfx.good();
-        return respond([pick(praise), it.fact], true);
+        return respond([pickFresh(praise), it.fact], true);
       }
       sfx.miss();
       return respond(T(`fix-${g}-${it.answer}`), false);
     }
     state.opinions.push({ id: it.line.i, g, t: it.line.t });   // it all adds up at the end
-    respond([T(`m-${g}`), it.react?.[g] || pick(ack)], true);
+    respond([T(`m-${g}`), it.react?.[g] || pickFresh(ack)], true);
   }
 
   async function finish() {

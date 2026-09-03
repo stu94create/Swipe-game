@@ -272,8 +272,22 @@
     'r2-intro': 'Round two. Voulez-Vous. Two new moves. Swipe up if you love something, swipe down if it is not for you.',
     'r2-hint': 'Left is yes, right is no, up is love it, down is not for me.',
     'r3-intro': 'Round three! Ring Ring. One last move. A double tap, two quick taps in the same spot, plays a question again.',
-    'r4-intro': 'Last round! Dancing Queen! Everything at once, and quick about it. Do what the voice says!',
+    // Round four used to be bare gesture cues, so its intro told the player to
+    // do what the voice says. It asks about ABBA now, hence a new ID rather
+    // than an edit: the old recording must not be served against new words.
+    'r4-intro-v2': 'Last round! Dancing Queen! All five moves, and quick about it. Answer fast!',
     'hint-all-five': 'All five moves are in play.',
+
+    /* --- what all those opinions add up to --- */
+    'profile-devotee': 'Your verdict: a card-carrying devotee. There is no such thing as too much ABBA.',
+    'profile-fan': 'Your verdict: a proper fan, with opinions.',
+    'profile-casual': 'Your verdict: happy when it comes on, not seeking it out.',
+    'profile-sceptic': 'Your verdict: a sceptic. We will work on you.',
+    'profile-dq': 'And a Dancing Queen purist, which is the only correct religion.',
+    'profile-dressup': 'And you have dressed up as one of them. We will not forget that.',
+    'profile-sequins': 'And you own something with sequins, which was the right answer all along.',
+    'profile-voyage': 'And you would be at Voyage tomorrow if somebody handed you a ticket.',
+    'profile-weepy': 'And you like the sad ones best. The Winner Takes It All has a lot to answer for.',
 
     /* --- practice mode --- */
     'pr-hint': 'Practice mode.',
@@ -556,21 +570,35 @@
     quiz('right', 'f-tacom-agnetha', 'f-tacom-agnetha-a'),
   ];
 
-  const buildRounds = () => [
-    { name: 'Round 1 · Waterloo', gestures: ['left', 'right'], level: 0,
-      hint: T('r1-hint'), intro: T('r1-intro'),
-      items: take(pool1, 12) },
-    { name: 'Round 2 · Voulez-Vous', gestures: ['left', 'right', 'up', 'down'], level: 1,
-      hint: T('r2-hint'), intro: T('r2-intro'),
-      items: [drill('up', 't-try-up', 't-try-up-a'), drill('down', 't-try-down', 't-try-down-a'), ...take(pool2, 12)] },
-    { name: 'Round 3 · Ring Ring', gestures: ALL, level: 2,
-      hint: T('hint-all-five'), intro: T('r3-intro'),
-      items: [drill('doubletap', 't-try-dt', 't-try-dt-a'),
-        ...shuffle([...take(pool3, 10), drill('doubletap', 't-dt-more'), drill('doubletap', 'cue-doubletap-1')])] },
-    { name: 'Round 4 · Dancing Queen', gestures: ALL, level: 3, crowd: true,
-      hint: T('hint-all-five'), intro: T('r4-intro'),
-      items: shuffle(['up', 'left', 'down', 'right', 'doubletap', 'up', 'right', 'down', 'left', 'doubletap', 'up', 'left', 'down', 'right']).map(g => drill(g)) },
-  ];
+  // Round four is the climax, so it asks about ABBA rather than drilling thumbs:
+  // short questions, answered fast, with the tempo and the voice both quicker.
+  const RAPID_MAX = 95;   // characters — long questions cannot be asked quickly
+  const buildRounds = () => {
+    // No round repeats a question another round has already used.
+    const used = new Set();
+    const draw = (pool, n) => {
+      const picked = take(pool.filter(x => !used.has(x)), n);
+      picked.forEach(x => used.add(x));
+      return picked;
+    };
+    const r1 = draw(pool1, 12);
+    const r2 = draw(pool2, 12);
+    const r3 = draw(pool3, 10);
+    const rapid = draw([...pool1, ...pool2, ...pool3].filter(x => x.line.t.length <= RAPID_MAX), 12);
+    return [
+      { name: 'Round 1 · Waterloo', gestures: ['left', 'right'], level: 0,
+        hint: T('r1-hint'), intro: T('r1-intro'), items: r1 },
+      { name: 'Round 2 · Voulez-Vous', gestures: ['left', 'right', 'up', 'down'], level: 1,
+        hint: T('r2-hint'), intro: T('r2-intro'),
+        items: [drill('up', 't-try-up', 't-try-up-a'), drill('down', 't-try-down', 't-try-down-a'), ...r2] },
+      { name: 'Round 3 · Ring Ring', gestures: ALL, level: 2,
+        hint: T('hint-all-five'), intro: T('r3-intro'),
+        items: [drill('doubletap', 't-try-dt', 't-try-dt-a'),
+          ...shuffle([...r3, drill('doubletap', 't-dt-more'), drill('doubletap', 'cue-doubletap-1')])] },
+      { name: 'Round 4 · Dancing Queen', gestures: ALL, level: 3, crowd: true,
+        hint: T('hint-all-five'), intro: T('r4-intro-v2'), items: rapid },
+    ];
+  };
   const practiceRounds = which => {
     const gs = which === 'all' ? ALL : [which];
     const seq = which === 'all' ? shuffle([...ALL, ...ALL, ...ALL]) : Array.from({ length: 15 }, () => which);
@@ -995,9 +1023,10 @@
   }
 
   /* ======================= game ======================= */
-  const state = { screen: 'intro', rounds: [], round: 0, idx: 0, awaiting: false, tries: 0, level: 0, near: 0, stats: {}, quiz: { asked: 0, right: 0 } };
+  const state = { screen: 'intro', rounds: [], round: 0, idx: 0, awaiting: false, tries: 0, level: 0, near: 0,
+    stats: {}, quiz: { asked: 0, right: 0 }, opinions: [] };
   const resetStats = () => { state.stats = {}; ALL.forEach(g => state.stats[g] = { att: 0, first: 0 });
-    state.near = 0; state.quiz = { asked: 0, right: 0 }; };
+    state.near = 0; state.quiz = { asked: 0, right: 0 }; state.opinions = []; };
   const cur = () => state.rounds[state.round];
   const item = () => cur().items[state.idx];
   const GAP = [500, 420, 340, 240];
@@ -1097,6 +1126,7 @@
       sfx.miss();
       return respond(T(`fix-${g}-${it.answer}`), false);
     }
+    state.opinions.push({ id: it.line.i, g, t: it.line.t });   // it all adds up at the end
     respond([T(`m-${g}`), it.react?.[g] || pick(ack)], true);
   }
 
@@ -1106,35 +1136,62 @@
     const total = rows.reduce((a, x) => a + x.att, 0), hits = rows.reduce((a, x) => a + x.first, 0);
     const list = $('#statsList'); list.innerHTML = '';
     rows.forEach(x => { const li = document.createElement('li'); li.innerHTML = `<span>${G[x.g].spoken.replace(/^a /, '').replace(/^\w/, c => c.toUpperCase())}</span><b>${x.first} of ${x.att}</b>`; list.appendChild(li); });
-    // On screen, the exact figures.
-    let summary = `You landed ${hits} of ${total} moves first time.`;
+    // What the opinions added up to. Scored so that loving something counts
+    // for more than merely approving of it.
+    const WEIGHT = { up: 2, left: 1, right: -1, down: -2 };
+    const ops = state.opinions;
+    const warmth = ops.length ? ops.reduce((a, o) => a + (WEIGHT[o.g] || 0), 0) / ops.length : 0;
+    const profile = !ops.length ? null
+      : warmth >= 1.3 ? T('profile-devotee')
+      : warmth >= 0.4 ? T('profile-fan')
+      : warmth >= -0.4 ? T('profile-casual')
+      : T('profile-sceptic');
+    // One standout, if they gave us one. Order is priority, not preference.
+    const said = (id, ...gs) => ops.some(o => o.id === id && gs.includes(o.g));
+    const signature = said('s-dancing-queen', 'up') ? T('profile-dq')
+      : said('q-dressup', 'left') ? T('profile-dressup')
+      : said('q-sequins', 'left') ? T('profile-sequins')
+      : said('q-voyage-show', 'left') ? T('profile-voyage')
+      : said('s-winner', 'up') ? T('profile-weepy')
+      : null;
+    // Song titles read back off the question they came from.
+    const titles = g => ops.filter(o => o.g === g && /^s-/.test(o.id)).map(o => o.t.split('. ')[0]);
+    const loved = titles('up'), spurned = titles('down');
+
+    // On screen: the ABBA score first, because that is what they came for, then
+    // the profile, and the moves underneath.
+    const parts = [];
+    if (state.quiz.asked) parts.push(`ABBA questions: ${state.quiz.right} of ${state.quiz.asked} right.`);
+    if (profile) parts.push(profile.t);
+    if (loved.length) parts.push(`Loved: ${loved.slice(0, 4).join(', ')}.`);
+    if (spurned.length) parts.push(`Not for you: ${spurned.slice(0, 3).join(', ')}.`);
+    parts.push(`You landed ${hits} of ${total} moves first time.`);
     const ranked = rows.filter(x => x.att > 1).sort((a, b) => b.first / b.att - a.first / a.att);
     const best = ranked[0], worst = ranked[ranked.length - 1];
     const clearWorst = ranked.length > 1 && best.first / best.att > worst.first / worst.att;
-    if (ranked.length > 1) {
-      summary += clearWorst
-        ? ` Strongest move: ${G[best.g].spoken}. One to practise: ${G[worst.g].spoken}.`
-        : ' Every move as steady as the next. Take a bow.';
-    }
-    if (state.quiz.asked) summary += ` ABBA questions: ${state.quiz.right} of ${state.quiz.asked} right.`;
-    if (state.near) summary += ` ${state.near} near ${state.near === 1 ? 'miss' : 'misses'} along the way, and you fixed every one.`;
-    $('#endSummary').textContent = summary;
+    if (clearWorst) parts.push(`One to practise: ${G[worst.g].spoken}.`);
+    if (state.near) parts.push(`${state.near} near ${state.near === 1 ? 'miss' : 'misses'}, and you fixed every one.`);
+    $('#endSummary').textContent = parts.join(' ');
 
-    // Spoken, a band rather than the count, so the ending stays in one voice.
+    // Spoken, in the same order and banded, so it stays in the recorded voice.
     const ratio = total ? hits / total : 0;
     const spoken = [T('sys-wrap')];
-    if (total) spoken.push(
-      hits === total  ? T('end-band-perfect')
-      : ratio >= 0.85 ? T('end-band-great')
-      : ratio >= 0.6  ? T('end-band-good')
-      : ratio >= 0.35 ? T('end-band-ok')
-      :                 T('end-band-learning'));
-    if (ranked.length > 1) spoken.push(clearWorst ? T(`end-practise-${worst.g}`) : T('end-steady'));
     if (state.quiz.asked) {
       const qr = state.quiz.right / state.quiz.asked;
       spoken.push(qr === 1 ? T('end-quiz-all') : qr >= 0.7 ? T('end-quiz-most')
         : qr >= 0.4 ? T('end-quiz-some') : T('end-quiz-few'));
     }
+    if (profile) spoken.push(profile);
+    if (signature) spoken.push(signature);
+    // One line about the moves, not two — they are the supporting act now.
+    if (clearWorst) spoken.push(T(`end-practise-${worst.g}`));
+    else if (ranked.length > 1) spoken.push(T('end-steady'));
+    else if (total) spoken.push(
+      hits === total  ? T('end-band-perfect')
+      : ratio >= 0.85 ? T('end-band-great')
+      : ratio >= 0.6  ? T('end-band-good')
+      : ratio >= 0.35 ? T('end-band-ok')
+      :                 T('end-band-learning'));
     if (state.near) spoken.push(T('end-fixed'));
     state.level = 0;
     await say(spoken);

@@ -22,7 +22,17 @@ Play it at `/abba/` (GitHub Pages serves from the repo root).
 | **Double tap** | Hear the question again |
 
 Four rounds unlock them in turn: two moves, then four, then all five, then all
-five at speed. Arrow keys and Enter work on desktop.
+five at speed on rapid-fire questions. Arrow keys and Enter work on desktop.
+
+**Double tap is always a replay**, in every round and on every question — never
+an answer, never a mistake. The one exception is the drill that teaches the
+move itself.
+
+Questions come in three kinds. An **opinion** has no wrong answer and feeds the
+profile at the end. A **quiz** asks about ABBA: answer it wrongly and the game
+says so and gives you the fact. A **drill** asks for a move, and a wrong one is
+coached on technique. The move stats count drills only — getting a fact wrong
+is not a botched swipe.
 
 ## Files
 

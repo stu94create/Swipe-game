@@ -284,6 +284,22 @@
     't-try-dt-a': 'That is how you hear a question again.',
     't-dt-more': 'Give me another double tap.',
 
+    /* --- the ending. The exact figures stay on screen; what is spoken is
+       banded, so the last thing the player hears is still the recorded voice
+       rather than the browser handing them a number. --- */
+    'end-band-perfect': 'Every move landed first time. Take a bow.',
+    'end-band-great': 'Nearly every move first time. You have the hang of this.',
+    'end-band-good': "Most of them first time. A good night's work.",
+    'end-band-ok': 'A wobble or two along the way, nothing serious.',
+    'end-band-learning': 'Plenty of misfires, but you got there in the end.',
+    'end-practise-left': 'One to practise: the swipe left.',
+    'end-practise-right': 'One to practise: the swipe right.',
+    'end-practise-up': 'One to practise: the swipe up.',
+    'end-practise-down': 'One to practise: the swipe down.',
+    'end-practise-doubletap': 'One to practise: the double tap.',
+    'end-steady': 'Every move as steady as the next.',
+    'end-fixed': 'And every near miss, you fixed.',
+
     /* --- round 1 questions --- */
     'q-abba-like': 'Do you like ABBA?',
     'q-abba-like-l': 'We are going to get along.',
@@ -750,8 +766,18 @@
       const file = line.i ? `voice/${line.i}.mp3` : null;
       if (file && !missing.has(file)) {
         const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
-        a.addEventListener('ended', () => res()); a.addEventListener('error', () => { missing.add(file); clipPlaying = null; speakTts(line.t, rate).then(res); });
-        a.play().catch(() => { missing.add(file); clipPlaying = null; speakTts(line.t, rate).then(res); });
+        // A missing clip fires BOTH the error event and the play() rejection,
+        // so the fallback has to be one-shot or the line gets spoken twice.
+        let fellBack = false;
+        const fallback = () => {
+          if (fellBack) return;
+          fellBack = true;
+          missing.add(file); clipPlaying = null;
+          speakTts(line.t, rate).then(res);
+        };
+        a.addEventListener('ended', () => res());
+        a.addEventListener('error', fallback);
+        a.play().catch(fallback);
         return;
       }
       speakTts(line.t, rate).then(res);
@@ -861,18 +887,32 @@
     const total = rows.reduce((a, x) => a + x.att, 0), hits = rows.reduce((a, x) => a + x.first, 0);
     const list = $('#statsList'); list.innerHTML = '';
     rows.forEach(x => { const li = document.createElement('li'); li.innerHTML = `<span>${G[x.g].spoken.replace(/^a /, '').replace(/^\w/, c => c.toUpperCase())}</span><b>${x.first} of ${x.att}</b>`; list.appendChild(li); });
+    // On screen, the exact figures.
     let summary = `You landed ${hits} of ${total} moves first time.`;
     const ranked = rows.filter(x => x.att > 1).sort((a, b) => b.first / b.att - a.first / a.att);
+    const best = ranked[0], worst = ranked[ranked.length - 1];
+    const clearWorst = ranked.length > 1 && best.first / best.att > worst.first / worst.att;
     if (ranked.length > 1) {
-      const best = ranked[0], worst = ranked[ranked.length - 1];
-      summary += best.first / best.att > worst.first / worst.att
+      summary += clearWorst
         ? ` Strongest move: ${G[best.g].spoken}. One to practise: ${G[worst.g].spoken}.`
         : ' Every move as steady as the next. Take a bow.';
     }
     if (state.near) summary += ` ${state.near} near ${state.near === 1 ? 'miss' : 'misses'} along the way, and you fixed every one.`;
     $('#endSummary').textContent = summary;
+
+    // Spoken, a band rather than the count, so the ending stays in one voice.
+    const ratio = total ? hits / total : 0;
+    const spoken = [T('sys-wrap')];
+    if (total) spoken.push(
+      hits === total  ? T('end-band-perfect')
+      : ratio >= 0.85 ? T('end-band-great')
+      : ratio >= 0.6  ? T('end-band-good')
+      : ratio >= 0.35 ? T('end-band-ok')
+      :                 T('end-band-learning'));
+    if (ranked.length > 1) spoken.push(clearWorst ? T(`end-practise-${worst.g}`) : T('end-steady'));
+    if (state.near) spoken.push(T('end-fixed'));
     state.level = 0;
-    await say([T('sys-wrap'), summary]);   // the summary counts the player's own moves, so it has no clip
+    await say(spoken);
   }
 
   /* ======================= pointer engine ======================= */

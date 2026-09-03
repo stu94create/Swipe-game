@@ -64,8 +64,10 @@ one line after changing its words.
 `extract-lines.mjs` fails the run if a line ID is asked for but undefined, or
 defined but never played — so a typo is caught before any credits are spent.
 
-### Two things with no clip
+### The ending
 
-The end-of-game summary counts your own moves ("You landed 9 of 34 first time"),
-so it is assembled at runtime and always uses the browser voice. Round names on
-screen are never spoken.
+Every spoken line has a clip, including the sign-off. The end screen shows the
+exact figures ("You landed 9 of 34 moves first time. Strongest move: a swipe
+left…"), but what it *says* is banded — a line picked by how the player did,
+plus the move worth practising — so the game finishes in the same voice it
+started in. Round names on screen are never spoken.

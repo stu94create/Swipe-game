@@ -51,6 +51,7 @@ for (const g of GESTURES) {
   wanted.add(`locked-${g}`);
   wanted.add(`m-${g}`);
   wanted.add(`pr-intro-${g}`);
+  wanted.add(`end-practise-${g}`);
   for (const w of GESTURES) if (w !== g) wanted.add(`fix-${g}-${w}`);
 }
 wanted.add('pr-intro-all');

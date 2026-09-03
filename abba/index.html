@@ -132,7 +132,7 @@
 
   <section id="lines" class="screen" hidden>
     <h2>Voice lines</h2>
-    <p>Every line the game can say, with the filename it will look for in the <code>voice/</code> folder. Generate a clip per line, name it as shown, and the game uses it automatically. Any line without a clip falls back to the built-in voice.</p>
+    <p>Every line the game can say, with the filename it looks for in the <code>voice/</code> folder. The name is a stable ID, not the wording, so a line can be reworded without losing its recording. Anything without a clip falls back to the built-in voice.</p>
     <ol id="linesList"></ol>
   </section>
 </main>
@@ -154,117 +154,398 @@
     doubletap: { label: 'Play it again', spoken: 'a double tap',  tip: 'tap twice quickly in the same spot, like knocking on a door' },
   };
   const ALL = ['left', 'right', 'up', 'down', 'doubletap'];
-  const praise = ['Spot on.', 'Lovely.', "That's it.", 'Perfect swipe.', "You've got it.", 'Clean as you like.', 'Beautiful.'];
-  const ack = ['Noted.', 'Fair enough.', 'Good taste.', 'Fine by me.', 'Duly recorded.', 'I see.'];
-  const drillText = {
-    up: ['Swipe up!', 'Up you go!', 'Give me an up.', 'Straight up!'],
-    down: ['Swipe down!', 'Down!', 'Give me a down.', 'Straight down!'],
-    left: ['Swipe left!', 'Left!', 'Give me a left.', 'Over to the left!'],
-    right: ['Swipe right!', 'Right!', 'Give me a right.', 'Over to the right!'],
-    doubletap: ['Double tap!', 'Two quick taps!', 'Knock knock. Double tap.', 'Double tap, go!'],
+
+  /* ======================= voice lines =======================
+     Every spoken line, keyed by a stable ID. The ID — never the wording — is
+     the filename the game looks for under voice/, so a line can be reworded
+     here without orphaning its recording: the old clip keeps playing until you
+     re-render that one ID with --force --only=<id>.
+
+     Change what a line MEANS and you should mint a new ID (append -v2) rather
+     than edit in place, so a recording of the old words can never be served
+     against the new ones.
+
+     scripts/extract-lines.mjs reads this object literal to build
+     voice/lines.json for the ElevenLabs generator. Keep it a plain literal. */
+  const LINES = {
+    /* --- framing --- */
+    'sys-welcome': 'Welcome to Swiper Trouper.',
+    'sys-again': 'Here we go again.',
+    'sys-practice': 'Practice it is.',
+    'sys-wrap': "That's a wrap. Thank you for the swipes.",
+
+    /* --- reactions to a correct move --- */
+    'praise-1': 'Spot on.',
+    'praise-2': 'Lovely.',
+    'praise-3': "That's it.",
+    'praise-4': 'Perfect swipe.',
+    'praise-5': "You've got it.",
+    'praise-6': 'Clean as you like.',
+    'praise-7': 'Beautiful.',
+
+    /* --- reactions to an opinion, when the question has nothing specific to say --- */
+    'ack-1': 'Noted.',
+    'ack-2': 'Fair enough.',
+    'ack-3': 'Good taste.',
+    'ack-4': 'Fine by me.',
+    'ack-5': 'Duly recorded.',
+    'ack-6': 'I see.',
+
+    /* --- bare commands, round 4 and practice --- */
+    'cue-up-1': 'Swipe up!',
+    'cue-up-2': 'Up you go!',
+    'cue-up-3': 'Give me an up.',
+    'cue-up-4': 'Straight up!',
+    'cue-down-1': 'Swipe down!',
+    'cue-down-2': 'Down!',
+    'cue-down-3': 'Give me a down.',
+    'cue-down-4': 'Straight down!',
+    'cue-left-1': 'Swipe left!',
+    'cue-left-2': 'Left!',
+    'cue-left-3': 'Give me a left.',
+    'cue-left-4': 'Over to the left!',
+    'cue-right-1': 'Swipe right!',
+    'cue-right-2': 'Right!',
+    'cue-right-3': 'Give me a right.',
+    'cue-right-4': 'Over to the right!',
+    'cue-doubletap-1': 'Double tap!',
+    'cue-doubletap-2': 'Two quick taps!',
+    'cue-doubletap-3': 'Knock knock. Double tap.',
+    'cue-doubletap-4': 'Double tap, go!',
+
+    /* --- naming back the move the player just made --- */
+    'm-left': 'Yes.',
+    'm-right': 'No.',
+    'm-up': 'Love it.',
+    'm-down': 'Not for me.',
+    'm-doubletap': 'Play it again.',
+
+    /* --- a move that has not been unlocked yet --- */
+    'locked-left': 'That is a swipe left. It comes in later.',
+    'locked-right': 'That is a swipe right. It comes in later.',
+    'locked-up': 'That is a swipe up. It comes in later.',
+    'locked-down': 'That is a swipe down. It comes in later.',
+    'locked-doubletap': 'That is a double tap. It comes in later.',
+
+    /* --- wrong move on a drill: what came through, and how to do the one asked for.
+       fix-<what they did>-<what was wanted>. --- */
+    'fix-left-right': 'That came through as a swipe left. For a swipe right, start on the left side and flick towards the right edge.',
+    'fix-left-up': 'That came through as a swipe left. For a swipe up, start low down and flick up towards the top of the screen.',
+    'fix-left-down': 'That came through as a swipe left. For a swipe down, start high up and flick down towards the bottom.',
+    'fix-left-doubletap': 'That came through as a swipe left. For a double tap, tap twice quickly in the same spot, like knocking on a door.',
+    'fix-right-left': 'That came through as a swipe right. For a swipe left, start on the right side of the screen and flick towards the left edge.',
+    'fix-right-up': 'That came through as a swipe right. For a swipe up, start low down and flick up towards the top of the screen.',
+    'fix-right-down': 'That came through as a swipe right. For a swipe down, start high up and flick down towards the bottom.',
+    'fix-right-doubletap': 'That came through as a swipe right. For a double tap, tap twice quickly in the same spot, like knocking on a door.',
+    'fix-up-left': 'That came through as a swipe up. For a swipe left, start on the right side of the screen and flick towards the left edge.',
+    'fix-up-right': 'That came through as a swipe up. For a swipe right, start on the left side and flick towards the right edge.',
+    'fix-up-down': 'That came through as a swipe up. For a swipe down, start high up and flick down towards the bottom.',
+    'fix-up-doubletap': 'That came through as a swipe up. For a double tap, tap twice quickly in the same spot, like knocking on a door.',
+    'fix-down-left': 'That came through as a swipe down. For a swipe left, start on the right side of the screen and flick towards the left edge.',
+    'fix-down-right': 'That came through as a swipe down. For a swipe right, start on the left side and flick towards the right edge.',
+    'fix-down-up': 'That came through as a swipe down. For a swipe up, start low down and flick up towards the top of the screen.',
+    'fix-down-doubletap': 'That came through as a swipe down. For a double tap, tap twice quickly in the same spot, like knocking on a door.',
+    'fix-doubletap-left': 'That came through as a double tap. For a swipe left, start on the right side of the screen and flick towards the left edge.',
+    'fix-doubletap-right': 'That came through as a double tap. For a swipe right, start on the left side and flick towards the right edge.',
+    'fix-doubletap-up': 'That came through as a double tap. For a swipe up, start low down and flick up towards the top of the screen.',
+    'fix-doubletap-down': 'That came through as a double tap. For a swipe down, start high up and flick down towards the bottom.',
+
+    /* --- near misses --- */
+    'nudge-diagonal-x': 'That was a bit diagonal. Keep it straight across, like drawing a line.',
+    'nudge-diagonal-y': 'That was a bit diagonal. Keep it straight up and down, like drawing a line.',
+    'nudge-short': 'That swipe was a bit short. Make it a bigger flick, right across the screen.',
+    'nudge-tap-double': 'That was one tap. For a double tap, tap twice quickly in the same spot.',
+    'nudge-tap-swipes': 'That was a tap. This round is swipes only. Flick your finger across the screen.',
+
+    /* --- rounds --- */
+    'r1-intro': 'Round one. Waterloo. Just two moves to start. Swipe left for yes, swipe right for no. Your opinion, no wrong answers yet.',
+    'r1-hint': 'For now it is left for yes, right for no.',
+    'r2-intro': 'Round two. Voulez-Vous. Two new moves. Swipe up if you love something, swipe down if it is not for you.',
+    'r2-hint': 'Left is yes, right is no, up is love it, down is not for me.',
+    'r3-intro': 'Round three! Ring Ring. One last move. A double tap, two quick taps in the same spot, plays a question again.',
+    'r4-intro': 'Last round! Dancing Queen! Everything at once, and quick about it. Do what the voice says!',
+    'hint-all-five': 'All five moves are in play.',
+
+    /* --- practice mode --- */
+    'pr-hint': 'Practice mode.',
+    'pr-intro-all': 'Practice time. All five moves are in play. Do what the voice says.',
+    'pr-intro-left': 'Practice time. Just a swipe left, over and over, until it is automatic.',
+    'pr-intro-right': 'Practice time. Just a swipe right, over and over, until it is automatic.',
+    'pr-intro-up': 'Practice time. Just a swipe up, over and over, until it is automatic.',
+    'pr-intro-down': 'Practice time. Just a swipe down, over and over, until it is automatic.',
+    'pr-intro-doubletap': 'Practice time. Just a double tap, over and over, until it is automatic.',
+
+    /* --- teaching a new move the moment it unlocks --- */
+    't-try-up': 'Let us try it. Swipe up.',
+    't-try-up-a': 'That is love it.',
+    't-try-down': 'Now swipe down.',
+    't-try-down-a': 'That is not for me.',
+    't-try-dt': 'Double tap now. Two quick taps.',
+    't-try-dt-a': 'That is how you hear a question again.',
+    't-dt-more': 'Give me another double tap.',
+
+    /* --- round 1 questions --- */
+    'q-abba-like': 'Do you like ABBA?',
+    'q-abba-like-l': 'We are going to get along.',
+    'q-abba-like-r': 'Brave. Very brave.',
+    'q-mamma-song': 'Do you like the song Mamma Mia?',
+    'q-mamma-film': 'Have you seen the Mamma Mia film?',
+    'q-concert': 'Would you go to an ABBA concert if you could?',
+    'q-own-record': 'Do you own an ABBA record, tape or CD?',
+    'q-wedding': 'Have you ever danced to ABBA at a wedding?',
+    'q-wedding-l': 'Everyone has. It is the law.',
+    'q-car': 'Do you sing along to ABBA in the car?',
+    'q-waterloo-words': 'Do you know all the words to Waterloo?',
+    'q-mamma-stage': 'Have you seen the Mamma Mia stage musical?',
+    'q-sequins': 'Do you own anything with sequins on it?',
+    'q-sequins-l': 'Correct answer.',
+    'q-eighties': 'Do you think ABBA should have kept going in the eighties?',
+    'q-voyage-show': 'Would you go to the ABBA Voyage show in London?',
+    'q-dressup': 'Have you ever dressed up as a member of ABBA?',
+    'q-dressup-l': 'Photos, please.',
+    'q-eurovision-fan': 'Are you a Eurovision fan?',
+    'q-dq-best': 'Is Dancing Queen the best ABBA song?',
+    'q-dq-best-r': 'A bold position. Noted.',
+
+    /* --- round 1 quiz --- */
+    'f-sweden': 'Quiz time. ABBA are from Sweden. Swipe left for yes if that is true.',
+    'f-sweden-a': 'Swedish through and through, from Stockholm.',
+    'f-euro74': 'ABBA won Eurovision in 1974. Yes or no?',
+    'f-euro74-a': 'They did, in Brighton, with Waterloo.',
+    'f-members': 'ABBA had five members. Yes or no?',
+    'f-members-a': 'Four. Agnetha, Björn, Benny and Anni-Frid.',
+    'f-couples': 'ABBA were two married couples. Yes or no?',
+    'f-couples-a': 'They were, for a while.',
+    'f-gold': 'The greatest hits album ABBA Gold came out in 1992. Yes or no?',
+    'f-gold-a': 'It did, and it has barely left the charts since.',
+    'f-norway': 'ABBA are from Norway. Yes or no?',
+    'f-norway-a': 'Sweden. Do not let a Swede hear you say Norway.',
+    'f-euro73': 'ABBA got into Eurovision on their first attempt, in 1973. Yes or no?',
+    'f-euro73-a': 'No. Ring Ring lost the Swedish selection. They came back the next year and won the lot.',
+    'f-benny-keys': 'Benny is the one on the keyboards. Yes or no?',
+    'f-benny-keys-a': 'Benny on keys, Björn on guitar.',
+    'f-agnetha-bjorn': 'Agnetha and Björn were married to each other. Yes or no?',
+    'f-agnetha-bjorn-a': 'They were. Benny and Anni-Frid were the other couple.',
+    'f-sequel': 'The Mamma Mia film got a sequel. Yes or no?',
+    'f-sequel-a': 'Mamma Mia! Here We Go Again, in 2018.',
+    'f-fernando-cat': 'Fernando is a song about a cat. Yes or no?',
+    'f-fernando-cat-a': 'It is not. Though it should be.',
+    'f-stig': "ABBA's manager was called Stig Anderson. Yes or no?",
+    'f-stig-a': 'Stig, the fifth ABBA some would say.',
+
+    /* --- round 2, the songs --- */
+    's-dancing-queen': 'Dancing Queen. Love it, yes, no, or not for you?',
+    's-dancing-queen-up': 'The only correct answer, frankly.',
+    's-dancing-queen-down': 'I will pretend I did not hear that.',
+    's-fernando': 'Fernando. Love it, yes, no, or not for you?',
+    's-fernando-down': 'Fernando is hurt.',
+    's-waterloo': 'Waterloo. Love it, yes, no, or not for you?',
+    's-waterloo-up': 'The one that started it all.',
+    's-take-a-chance': 'Take a Chance on Me. Love it, yes, no, or not for you?',
+    's-winner': 'The Winner Takes It All. Love it, yes, no, or not for you?',
+    's-winner-up': 'A weepy one. Good choice.',
+    's-super-trouper': 'Super Trouper. Love it, yes, no, or not for you?',
+    's-sos': 'SOS. Love it, yes, no, or not for you?',
+    's-gimme': 'Gimme Gimme Gimme. Love it, yes, no, or not for you?',
+    's-voulez-vous': 'Voulez-Vous. Love it, yes, no, or not for you?',
+    's-knowing-me': 'Knowing Me, Knowing You. Love it, yes, no, or not for you?',
+    's-chiquitita': 'Chiquitita. Love it, yes, no, or not for you?',
+    's-money': 'Money, Money, Money. Love it, yes, no, or not for you?',
+    's-money-up': 'Very sensible.',
+    's-name-of-the-game': 'The Name of the Game. Love it, yes, no, or not for you?',
+    's-thank-you': 'Thank You for the Music. Love it, yes, no, or not for you?',
+    's-mother-know': 'Does Your Mother Know. Love it, yes, no, or not for you?',
+    's-lay-all-your-love': 'Lay All Your Love on Me. Love it, yes, no, or not for you?',
+    's-angeleyes': 'Angeleyes. Love it, yes, no, or not for you?',
+    's-slipping': 'Slipping Through My Fingers. Love it, yes, no, or not for you?',
+    's-one-of-us': 'One of Us. Love it, yes, no, or not for you?',
+    's-head-over-heels': 'Head Over Heels. Love it, yes, no, or not for you?',
+    's-honey': 'Honey, Honey. Love it, yes, no, or not for you?',
+    's-ring-ring': 'Ring Ring. Love it, yes, no, or not for you?',
+    's-summer-night-city': 'Summer Night City. Love it, yes, no, or not for you?',
+    's-i-have-a-dream': 'I Have a Dream. Love it, yes, no, or not for you?',
+    's-eagle': 'Eagle. Love it, yes, no, or not for you?',
+
+    /* --- round 2 quiz --- */
+    'f-name': "Quiz. The name ABBA comes from the first letters of the members' names. Swipe up for true, down for false.",
+    'f-name-a': 'Agnetha, Björn, Benny, Anni-Frid.',
+    'f-voyage': 'ABBA released a comeback album called Voyage in 2021. Up for true, down for false.',
+    'f-voyage-a': 'Forty years after the last one.',
+    'f-voyage-paris': 'The ABBA Voyage concert with digital avatars is in Paris. Up for true, down for false.',
+    'f-voyage-paris-a': 'It is in London, in a purpose-built arena.',
+    'f-flying': 'Agnetha was famously nervous of flying. Up for true, down for false.',
+    'f-flying-a': 'She was. It made touring hard work.',
+    'f-muriel': "The film Muriel's Wedding is full of ABBA songs. Up for true, down for false.",
+    'f-muriel-a': 'It is. Muriel is a superfan.',
+    'f-cher': 'Cher made a whole album of ABBA covers. Up for true, down for false.',
+    'f-cher-a': 'She did, in 2018, after the Mamma Mia sequel.',
+    'f-chess': 'Björn and Benny wrote the musical Chess. Up for true, down for false.',
+    'f-chess-a': 'With Tim Rice on words.',
+    'f-euro24': 'ABBA reunited on stage to perform live at Eurovision 2024 in Sweden. Up for true, down for false.',
+    'f-euro24-a': 'They did not. Their avatars appeared, but the four stayed in the audience of history.',
+    'f-competition': 'The band name was picked through a newspaper competition. Up for true, down for false.',
+    'f-competition-a': 'A Gothenburg paper ran a competition. ABBA won, not that there was much competition.',
+    'f-fish': 'There was already a Swedish fish company called Abba. Up for true, down for false.',
+    'f-fish-a': 'A tinned fish firm. They kindly gave permission.',
+    'f-dq-1986': 'Dancing Queen was released in 1986. Up for true, down for false.',
+    'f-dq-1986-a': '1976. Ten years earlier.',
+
+    /* --- round 3 --- */
+    'q-chiquitita-replay': 'Here is one you can replay. Double tap to hear it again, or just answer. Do you like Chiquitita?',
+    'q-super-trouper-replay': 'Super Trouper. Love it, yes, no, or not for you? Double tap to hear it again.',
+    'q-waterloo-or-fernando': 'Would you rather hear Waterloo or Fernando right now? Swipe left for Waterloo, right for Fernando.',
+    'q-voulez-vous-short': 'Voulez-Vous. Love it or not for you?',
+    'f-unicef': 'Money from Chiquitita goes to UNICEF. Swipe left for yes if that is true.',
+    'f-unicef-a': 'It does, and has since 1979.',
+    'f-broadway': 'The Mamma Mia musical first opened on Broadway. Swipe up for true, down for false.',
+    'f-broadway-a': 'It opened in London, in 1999.',
+    'f-meryl': 'Meryl Streep starred in the Mamma Mia film. Up for true, down for false.',
+    'f-meryl-a': 'She did, in 2008.',
+    'f-benny-keys-2': 'Benny is the one on the keyboards. Swipe left for yes, right for no.',
+    'f-farewell': 'ABBA broke up with a big farewell concert. Swipe left for yes, right for no.',
+    'f-farewell-a': 'They never formally split. They just stopped, in 1982.',
+    'f-brosnan': 'Pierce Brosnan sings in the Mamma Mia film. Up for true, down for false.',
+    'f-brosnan-a': 'He does. Opinions on it vary.',
+    'f-frida': 'Anni-Frid is often called Frida. Swipe left for yes, right for no.',
+    'f-frida-a': 'Frida it is.',
+    'f-waterloo-swedish': 'ABBA sang Waterloo in Swedish at Eurovision. Up for true, down for false.',
+    'f-waterloo-swedish-a': 'English. There is a Swedish version too.',
+    'f-waterloo-battle': 'Waterloo is named after a battle. Left for yes, right for no.',
+    'f-waterloo-battle-a': 'Napoleon, 1815. Same result.',
+    'f-tacom-agnetha': 'Take a Chance on Me was written by Agnetha. Left for yes, right for no.',
+    'f-tacom-agnetha-a': 'Benny and Björn wrote it, like nearly all of them.',
   };
-  const drill = (g, text, fact) => ({ type: 'drill', answer: g, text: text || pick(drillText[g]), fact });
-  const op = (text, react) => ({ type: 'opinion', text, react });
+  if (typeof window !== 'undefined') window.SWIPER_LINES = LINES;   // for scripts/check-lines.mjs
+
+  // A spoken line: { i: stable id, t: the words }. Lines built at runtime from
+  // the player's own numbers have no id and fall back to the browser voice.
+  const T = id => {
+    const t = LINES[id];
+    if (t === undefined) console.warn('Swiper Trouper: no line for id', id);
+    return { i: id, t: t || '' };
+  };
+
+  const praise = ['praise-1', 'praise-2', 'praise-3', 'praise-4', 'praise-5', 'praise-6', 'praise-7'].map(T);
+  const ack = ['ack-1', 'ack-2', 'ack-3', 'ack-4', 'ack-5', 'ack-6'].map(T);
+  const drillText = {
+    up: ['cue-up-1', 'cue-up-2', 'cue-up-3', 'cue-up-4'].map(T),
+    down: ['cue-down-1', 'cue-down-2', 'cue-down-3', 'cue-down-4'].map(T),
+    left: ['cue-left-1', 'cue-left-2', 'cue-left-3', 'cue-left-4'].map(T),
+    right: ['cue-right-1', 'cue-right-2', 'cue-right-3', 'cue-right-4'].map(T),
+    doubletap: ['cue-doubletap-1', 'cue-doubletap-2', 'cue-doubletap-3', 'cue-doubletap-4'].map(T),
+  };
+  const drill = (g, id, factId) => ({ type: 'drill', answer: g, line: id ? T(id) : pick(drillText[g]), fact: factId ? T(factId) : null });
+  const op = (id, react) => ({ type: 'opinion', line: T(id),
+    react: react ? Object.fromEntries(Object.entries(react).map(([k, v]) => [k, T(v)])) : null });
 
   /* ======================= question pools ======================= */
   // Round 1: yes / no only
   const pool1 = [
-    op('Do you like ABBA?', { left: 'We are going to get along.', right: 'Brave. Very brave.' }),
-    op('Do you like the song Mamma Mia?'),
-    op('Have you seen the Mamma Mia film?'),
-    op('Would you go to an ABBA concert if you could?'),
-    op('Do you own an ABBA record, tape or CD?'),
-    op('Have you ever danced to ABBA at a wedding?', { left: 'Everyone has. It is the law.' }),
-    op('Do you sing along to ABBA in the car?'),
-    op('Do you know all the words to Waterloo?'),
-    op('Have you seen the Mamma Mia stage musical?'),
-    op('Do you own anything with sequins on it?', { left: 'Correct answer.' }),
-    op('Do you think ABBA should have kept going in the eighties?'),
-    op('Would you go to the ABBA Voyage show in London?'),
-    op('Have you ever dressed up as a member of ABBA?', { left: 'Photos, please.' }),
-    op('Are you a Eurovision fan?'),
-    op('Is Dancing Queen the best ABBA song?', { right: 'A bold position. Noted.' }),
-    drill('left', 'Quiz time. ABBA are from Sweden. Swipe left for yes if that is true.', 'Swedish through and through, from Stockholm.'),
-    drill('left', 'ABBA won Eurovision in 1974. Yes or no?', 'They did, in Brighton, with Waterloo.'),
-    drill('right', 'ABBA had five members. Yes or no?', 'Four. Agnetha, Björn, Benny and Anni-Frid.'),
-    drill('left', 'ABBA were two married couples. Yes or no?', 'They were, for a while.'),
-    drill('left', 'The greatest hits album ABBA Gold came out in 1992. Yes or no?', 'It did, and it has barely left the charts since.'),
-    drill('right', 'ABBA are from Norway. Yes or no?', 'Sweden. Do not let a Swede hear you say Norway.'),
-    drill('right', 'ABBA got into Eurovision on their first attempt, in 1973. Yes or no?', 'No. Ring Ring lost the Swedish selection. They came back the next year and won the lot.'),
-    drill('left', 'Benny is the one on the keyboards. Yes or no?', 'Benny on keys, Björn on guitar.'),
-    drill('left', 'Agnetha and Björn were married to each other. Yes or no?', 'They were. Benny and Anni-Frid were the other couple.'),
-    drill('left', 'The Mamma Mia film got a sequel. Yes or no?', 'Mamma Mia! Here We Go Again, in 2018.'),
-    drill('right', 'Fernando is a song about a cat. Yes or no?', 'It is not. Though it should be.'),
-    drill('left', "ABBA's manager was called Stig Anderson. Yes or no?", 'Stig, the fifth ABBA some would say.'),
+    op('q-abba-like', { left: 'q-abba-like-l', right: 'q-abba-like-r' }),
+    op('q-mamma-song'),
+    op('q-mamma-film'),
+    op('q-concert'),
+    op('q-own-record'),
+    op('q-wedding', { left: 'q-wedding-l' }),
+    op('q-car'),
+    op('q-waterloo-words'),
+    op('q-mamma-stage'),
+    op('q-sequins', { left: 'q-sequins-l' }),
+    op('q-eighties'),
+    op('q-voyage-show'),
+    op('q-dressup', { left: 'q-dressup-l' }),
+    op('q-eurovision-fan'),
+    op('q-dq-best', { right: 'q-dq-best-r' }),
+    drill('left', 'f-sweden', 'f-sweden-a'),
+    drill('left', 'f-euro74', 'f-euro74-a'),
+    drill('right', 'f-members', 'f-members-a'),
+    drill('left', 'f-couples', 'f-couples-a'),
+    drill('left', 'f-gold', 'f-gold-a'),
+    drill('right', 'f-norway', 'f-norway-a'),
+    drill('right', 'f-euro73', 'f-euro73-a'),
+    drill('left', 'f-benny-keys', 'f-benny-keys-a'),
+    drill('left', 'f-agnetha-bjorn', 'f-agnetha-bjorn-a'),
+    drill('left', 'f-sequel', 'f-sequel-a'),
+    drill('right', 'f-fernando-cat', 'f-fernando-cat-a'),
+    drill('left', 'f-stig', 'f-stig-a'),
   ];
   // Round 2: love it / yes / no / not for me
-  const songs = ['Dancing Queen', 'Fernando', 'Waterloo', 'Take a Chance on Me', 'The Winner Takes It All', 'Super Trouper', 'SOS',
-    'Gimme Gimme Gimme', 'Voulez-Vous', 'Knowing Me, Knowing You', 'Chiquitita', 'Money, Money, Money', 'The Name of the Game',
-    'Thank You for the Music', 'Does Your Mother Know', 'Lay All Your Love on Me', 'Angeleyes', 'Slipping Through My Fingers',
-    'One of Us', 'Head Over Heels', 'Honey, Honey', 'Ring Ring', 'Summer Night City', 'I Have a Dream', 'Eagle'];
-  const songReacts = {
-    'Dancing Queen': { up: 'The only correct answer, frankly.', down: 'I will pretend I did not hear that.' },
-    'The Winner Takes It All': { up: 'A weepy one. Good choice.' },
-    'Waterloo': { up: 'The one that started it all.' },
-    'Fernando': { down: 'Fernando is hurt.' },
-    'Money, Money, Money': { up: 'Very sensible.' },
-  };
   const pool2 = [
-    ...songs.map(s => op(`${s}. Love it, yes, no, or not for you?`, songReacts[s])),
-    drill('up', "Quiz. The name ABBA comes from the first letters of the members' names. Swipe up for true, down for false.", 'Agnetha, Björn, Benny, Anni-Frid.'),
-    drill('up', 'ABBA released a comeback album called Voyage in 2021. Up for true, down for false.', 'Forty years after the last one.'),
-    drill('down', 'The ABBA Voyage concert with digital avatars is in Paris. Up for true, down for false.', 'It is in London, in a purpose-built arena.'),
-    drill('up', 'Agnetha was famously nervous of flying. Up for true, down for false.', 'She was. It made touring hard work.'),
-    drill('up', "The film Muriel's Wedding is full of ABBA songs. Up for true, down for false.", 'It is. Muriel is a superfan.'),
-    drill('up', 'Cher made a whole album of ABBA covers. Up for true, down for false.', 'She did, in 2018, after the Mamma Mia sequel.'),
-    drill('up', 'Björn and Benny wrote the musical Chess. Up for true, down for false.', 'With Tim Rice on words.'),
-    drill('down', 'ABBA reunited on stage to perform live at Eurovision 2024 in Sweden. Up for true, down for false.', 'They did not. Their avatars appeared, but the four stayed in the audience of history.'),
-    drill('up', 'The band name was picked through a newspaper competition. Up for true, down for false.', 'A Gothenburg paper ran a competition. ABBA won, not that there was much competition.'),
-    drill('up', 'There was already a Swedish fish company called Abba. Up for true, down for false.', 'A tinned fish firm. They kindly gave permission.'),
-    drill('down', 'Dancing Queen was released in 1986. Up for true, down for false.', '1976. Ten years earlier.'),
+    op('s-dancing-queen', { up: 's-dancing-queen-up', down: 's-dancing-queen-down' }),
+    op('s-fernando', { down: 's-fernando-down' }),
+    op('s-waterloo', { up: 's-waterloo-up' }),
+    op('s-take-a-chance'),
+    op('s-winner', { up: 's-winner-up' }),
+    op('s-super-trouper'),
+    op('s-sos'),
+    op('s-gimme'),
+    op('s-voulez-vous'),
+    op('s-knowing-me'),
+    op('s-chiquitita'),
+    op('s-money', { up: 's-money-up' }),
+    op('s-name-of-the-game'),
+    op('s-thank-you'),
+    op('s-mother-know'),
+    op('s-lay-all-your-love'),
+    op('s-angeleyes'),
+    op('s-slipping'),
+    op('s-one-of-us'),
+    op('s-head-over-heels'),
+    op('s-honey'),
+    op('s-ring-ring'),
+    op('s-summer-night-city'),
+    op('s-i-have-a-dream'),
+    op('s-eagle'),
+    drill('up', 'f-name', 'f-name-a'),
+    drill('up', 'f-voyage', 'f-voyage-a'),
+    drill('down', 'f-voyage-paris', 'f-voyage-paris-a'),
+    drill('up', 'f-flying', 'f-flying-a'),
+    drill('up', 'f-muriel', 'f-muriel-a'),
+    drill('up', 'f-cher', 'f-cher-a'),
+    drill('up', 'f-chess', 'f-chess-a'),
+    drill('down', 'f-euro24', 'f-euro24-a'),
+    drill('up', 'f-competition', 'f-competition-a'),
+    drill('up', 'f-fish', 'f-fish-a'),
+    drill('down', 'f-dq-1986', 'f-dq-1986-a'),
   ];
   // Round 3: all five, mixed
   const pool3 = [
-    op('Here is one you can replay. Double tap to hear it again, or just answer. Do you like Chiquitita?'),
-    op('Super Trouper. Love it, yes, no, or not for you? Double tap to hear it again.'),
-    op('Would you rather hear Waterloo or Fernando right now? Swipe left for Waterloo, right for Fernando.'),
-    op('Voulez-Vous. Love it or not for you?'),
-    drill('left', 'Money from Chiquitita goes to UNICEF. Swipe left for yes if that is true.', 'It does, and has since 1979.'),
-    drill('down', 'The Mamma Mia musical first opened on Broadway. Swipe up for true, down for false.', 'It opened in London, in 1999.'),
-    drill('up', 'Meryl Streep starred in the Mamma Mia film. Up for true, down for false.', 'She did, in 2008.'),
-    drill('left', 'Benny is the one on the keyboards. Swipe left for yes, right for no.', 'Benny on keys, Björn on guitar.'),
-    drill('right', 'ABBA broke up with a big farewell concert. Swipe left for yes, right for no.', 'They never formally split. They just stopped, in 1982.'),
-    drill('up', 'Pierce Brosnan sings in the Mamma Mia film. Up for true, down for false.', 'He does. Opinions on it vary.'),
-    drill('left', 'Anni-Frid is often called Frida. Swipe left for yes, right for no.', 'Frida it is.'),
-    drill('down', 'ABBA sang Waterloo in Swedish at Eurovision. Up for true, down for false.', 'English. There is a Swedish version too.'),
-    drill('left', 'Waterloo is named after a battle. Left for yes, right for no.', 'Napoleon, 1815. Same result.'),
-    drill('right', 'Take a Chance on Me was written by Agnetha. Left for yes, right for no.', 'Benny and Björn wrote it, like nearly all of them.'),
+    op('q-chiquitita-replay'),
+    op('q-super-trouper-replay'),
+    op('q-waterloo-or-fernando'),
+    op('q-voulez-vous-short'),
+    drill('left', 'f-unicef', 'f-unicef-a'),
+    drill('down', 'f-broadway', 'f-broadway-a'),
+    drill('up', 'f-meryl', 'f-meryl-a'),
+    drill('left', 'f-benny-keys-2', 'f-benny-keys-a'),
+    drill('right', 'f-farewell', 'f-farewell-a'),
+    drill('up', 'f-brosnan', 'f-brosnan-a'),
+    drill('left', 'f-frida', 'f-frida-a'),
+    drill('down', 'f-waterloo-swedish', 'f-waterloo-swedish-a'),
+    drill('left', 'f-waterloo-battle', 'f-waterloo-battle-a'),
+    drill('right', 'f-tacom-agnetha', 'f-tacom-agnetha-a'),
   ];
 
   const buildRounds = () => [
     { name: 'Round 1 · Waterloo', gestures: ['left', 'right'], level: 0,
-      hint: 'For now it is left for yes, right for no.',
-      intro: 'Round one. Waterloo. Just two moves to start. Swipe left for yes, swipe right for no. Your opinion, no wrong answers yet.',
+      hint: T('r1-hint'), intro: T('r1-intro'),
       items: take(pool1, 12) },
     { name: 'Round 2 · Voulez-Vous', gestures: ['left', 'right', 'up', 'down'], level: 1,
-      hint: 'Left is yes, right is no, up is love it, down is not for me.',
-      intro: 'Round two. Voulez-Vous. Two new moves. Swipe up if you love something, swipe down if it is not for you.',
-      items: [drill('up', 'Let us try it. Swipe up.', 'That is love it.'), drill('down', 'Now swipe down.', 'That is not for me.'), ...take(pool2, 12)] },
+      hint: T('r2-hint'), intro: T('r2-intro'),
+      items: [drill('up', 't-try-up', 't-try-up-a'), drill('down', 't-try-down', 't-try-down-a'), ...take(pool2, 12)] },
     { name: 'Round 3 · Ring Ring', gestures: ALL, level: 2,
-      hint: 'All five moves are in play.',
-      intro: 'Round three! Ring Ring. One last move. A double tap, two quick taps in the same spot, plays a question again.',
-      items: [drill('doubletap', 'Double tap now. Two quick taps.', 'That is how you hear a question again.'),
-        ...shuffle([...take(pool3, 10), drill('doubletap', 'Give me another double tap.'), drill('doubletap', 'Double tap!')])] },
+      hint: T('hint-all-five'), intro: T('r3-intro'),
+      items: [drill('doubletap', 't-try-dt', 't-try-dt-a'),
+        ...shuffle([...take(pool3, 10), drill('doubletap', 't-dt-more'), drill('doubletap', 'cue-doubletap-1')])] },
     { name: 'Round 4 · Dancing Queen', gestures: ALL, level: 3, crowd: true,
-      hint: 'All five moves are in play.',
-      intro: 'Last round! Dancing Queen! Everything at once, and quick about it. Do what the voice says!',
+      hint: T('hint-all-five'), intro: T('r4-intro'),
       items: shuffle(['up', 'left', 'down', 'right', 'doubletap', 'up', 'right', 'down', 'left', 'doubletap', 'up', 'left', 'down', 'right']).map(g => drill(g)) },
   ];
   const practiceRounds = which => {
     const gs = which === 'all' ? ALL : [which];
     const seq = which === 'all' ? shuffle([...ALL, ...ALL, ...ALL]) : Array.from({ length: 15 }, () => which);
     return [{ name: which === 'all' ? 'Practice · all five' : `Practice · ${G[which].spoken.replace(/^a /, '')}`, gestures: gs, level: 1,
-      hint: 'Practice mode.', intro: which === 'all' ? 'Practice time. All five moves are in play. Do what the voice says.' : `Practice time. Just ${G[which].spoken}, over and over, until it is automatic.`,
+      hint: T('pr-hint'), intro: T(`pr-intro-${which}`),
       items: seq.map(g => drill(g)) }];
   };
 
@@ -451,8 +732,9 @@
   function duck(on) { ducked = on; if (playing && !music.paused) fadeTo(music, on ? DUCK : VOL, 250); }
 
   /* ======================= voice ======================= */
-  // Any line with a matching clip at voice/<slug>.mp3 is played from file (ElevenLabs etc.); otherwise system speech.
-  const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70);
+  // A line with a clip at voice/<id>.mp3 plays from file (ElevenLabs); anything
+  // missing, and anything built at runtime from the player's numbers, falls
+  // back to system speech.
   const missing = new Set();
   let voice = null;
   function pickVoice() {
@@ -463,16 +745,16 @@
   if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
   const feedback = $('#feedback');
   let sayToken = 0, clipPlaying = null;
-  function speakOne(text, rate) {
+  function speakOne(line, rate) {
     return new Promise(res => {
-      const file = `voice/${slug(text)}.mp3`;
-      if (!missing.has(file)) {
+      const file = line.i ? `voice/${line.i}.mp3` : null;
+      if (file && !missing.has(file)) {
         const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
-        a.addEventListener('ended', () => res()); a.addEventListener('error', () => { missing.add(file); clipPlaying = null; speakTts(text, rate).then(res); });
-        a.play().catch(() => { missing.add(file); clipPlaying = null; speakTts(text, rate).then(res); });
+        a.addEventListener('ended', () => res()); a.addEventListener('error', () => { missing.add(file); clipPlaying = null; speakTts(line.t, rate).then(res); });
+        a.play().catch(() => { missing.add(file); clipPlaying = null; speakTts(line.t, rate).then(res); });
         return;
       }
-      speakTts(text, rate).then(res);
+      speakTts(line.t, rate).then(res);
     });
   }
   function speakTts(text, rate) {
@@ -485,10 +767,11 @@
     });
   }
   function stopVoice() { speechSynthesis?.cancel(); if (clipPlaying) { clipPlaying.pause(); clipPlaying = null; } }
+  // Accepts spoken lines, or bare strings for text assembled at runtime.
   async function say(parts) {
-    parts = [].concat(parts).filter(Boolean);
+    parts = [].concat(parts).filter(Boolean).map(p => typeof p === 'string' ? { t: p } : p);
     const my = ++sayToken; stopVoice();
-    feedback.textContent = parts.join(' ');
+    feedback.textContent = parts.map(p => p.t).join(' ');
     duck(true);
     const rate = [1, 1.03, 1.07, 1.13][state.level] || 1;
     for (const p of parts) { if (my !== sayToken) break; await speakOne(p, rate); }
@@ -531,8 +814,8 @@
   }
   function present() {
     const it = item(); state.tries = 0; state.awaiting = true;
-    $('#qtext').textContent = it.text;
-    say(it.text); // not awaited: a confident player can answer while it's still talking
+    $('#qtext').textContent = it.line.t;
+    say(it.line); // not awaited: a confident player can answer while it's still talking
   }
   function next() {
     state.idx++;
@@ -548,17 +831,15 @@
     if (state.screen !== 'play' || !state.awaiting) return;
     const r = cur(), it = item(), unlocked = r.gestures;
 
-    if (g === 'diagonal') { state.near++; sfx.miss(); return respond(`That was a bit diagonal. Keep it straight ${meta.axis === 'x' ? 'across' : 'up and down'}, like drawing a line.`, false); }
-    if (g === 'short')    { state.near++; sfx.miss(); return respond('That swipe was a bit short. Make it a bigger flick, right across the screen.', false); }
+    if (g === 'diagonal') { state.near++; sfx.miss(); return respond(T(meta.axis === 'x' ? 'nudge-diagonal-x' : 'nudge-diagonal-y'), false); }
+    if (g === 'short')    { state.near++; sfx.miss(); return respond(T('nudge-short'), false); }
     if (g === 'tap') {
       state.near++;
-      return respond(unlocked.includes('doubletap')
-        ? 'That was one tap. For a double tap, tap twice quickly in the same spot.'
-        : 'That was a tap. This round is swipes only. Flick your finger across the screen.', false);
+      return respond(T(unlocked.includes('doubletap') ? 'nudge-tap-double' : 'nudge-tap-swipes'), false);
     }
-    if (!unlocked.includes(g)) { state.near++; return respond([`That is ${G[g].spoken}. It comes in later.`, r.hint], false); }
+    if (!unlocked.includes(g)) { state.near++; return respond([T(`locked-${g}`), r.hint], false); }
 
-    if (g === 'doubletap' && it.type !== 'drill') { say(it.text); return; } // replay, stay awaiting
+    if (g === 'doubletap' && it.type !== 'drill') { say(it.line); return; } // replay, stay awaiting
 
     if (it.type === 'drill') {
       const s = state.stats[it.answer]; state.tries++;
@@ -569,9 +850,9 @@
         return respond([pick(praise), it.fact], true);
       }
       sfx.miss();
-      return respond(`That came through as ${G[g].spoken}. For ${G[it.answer].spoken}, ${G[it.answer].tip}.`, false);
+      return respond(T(`fix-${g}-${it.answer}`), false);
     }
-    respond([`${G[g].label}.`, it.react?.[g] || pick(ack)], true);
+    respond([T(`m-${g}`), it.react?.[g] || pick(ack)], true);
   }
 
   async function finish() {
@@ -591,7 +872,7 @@
     if (state.near) summary += ` ${state.near} near ${state.near === 1 ? 'miss' : 'misses'} along the way, and you fixed every one.`;
     $('#endSummary').textContent = summary;
     state.level = 0;
-    await say(["That's a wrap. Thank you for the swipes.", summary]);
+    await say([T('sys-wrap'), summary]);   // the summary counts the player's own moves, so it has no clip
   }
 
   /* ======================= pointer engine ======================= */
@@ -649,7 +930,7 @@
   /* ======================= buttons ======================= */
   // Tap anywhere on the start screen, exactly like Ballycrann. Not {once:true}:
   // "Start over" brings the player back here and the screen must arm again.
-  function startGame() { if (state.screen === 'intro') begin(buildRounds(), 'Welcome to Swiper Trouper.'); }
+  function startGame() { if (state.screen === 'intro') begin(buildRounds(), T('sys-welcome')); }
   $('#intro').addEventListener('click', startGame);
 
   const musicBtn = $('#musicBtn');
@@ -659,25 +940,18 @@
     if (musicEnabled) setIntensity(state.level); else stopMusic();
   });
 
-  $('#againBtn').addEventListener('click', () => begin(buildRounds(), 'Here we go again.'));
-  $('#practiceBtn2').addEventListener('click', () => begin(practiceRounds('all'), 'Practice it is.'));
+  $('#againBtn').addEventListener('click', () => begin(buildRounds(), T('sys-again')));
+  $('#practiceBtn2').addEventListener('click', () => begin(practiceRounds('all'), T('sys-practice')));
   $('#quit').addEventListener('click', () => { sayToken++; stopVoice(); stopMusic(); state.awaiting = false; state.level = 0; document.documentElement.style.setProperty('--sequin', 0.4); show('intro'); });
 
   /* ======================= voice line list (open index.html#lines) ======================= */
   if (location.hash === '#lines') {
-    const lines = new Set(['Welcome to Swiper Trouper.', 'Here we go again.', 'Practice it is.', "That's a wrap. Thank you for the swipes.",
-      ...praise, ...ack, ...Object.values(drillText).flat(),
-      'Let us try it. Swipe up.', 'That is love it.', 'Now swipe down.', 'That is not for me.', 'Double tap now. Two quick taps.', 'That is how you hear a question again.', 'Give me another double tap.',
-      'That swipe was a bit short. Make it a bigger flick, right across the screen.',
-      'That was one tap. For a double tap, tap twice quickly in the same spot.',
-      'That was a tap. This round is swipes only. Flick your finger across the screen.',
-      'That was a bit diagonal. Keep it straight across, like drawing a line.', 'That was a bit diagonal. Keep it straight up and down, like drawing a line.']);
-    buildRounds().forEach(r => { lines.add(r.intro); lines.add(r.hint); });
-    ALL.forEach(g => { lines.add(`${G[g].label}.`); lines.add(`That is ${G[g].spoken}. It comes in later.`);
-      ALL.forEach(w => { if (w !== g) lines.add(`That came through as ${G[g].spoken}. For ${G[w].spoken}, ${G[w].tip}.`); }); });
-    [...pool1, ...pool2, ...pool3].forEach(q => { lines.add(q.text); if (q.fact) lines.add(q.fact); if (q.react) Object.values(q.react).forEach(v => lines.add(v)); });
     const ol = $('#linesList');
-    [...lines].forEach(l => { const li = document.createElement('li'); li.innerHTML = `${l}<br><code>voice/${slug(l)}.mp3</code>`; ol.appendChild(li); });
+    Object.entries(LINES).forEach(([id, text]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `${text}<br><code>voice/${id}.mp3</code>`;
+      ol.appendChild(li);
+    });
     show('lines');
   }
 })();

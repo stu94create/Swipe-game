@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generate ElevenLabs audio for every line in audio/lines.json.
+// Generate ElevenLabs audio for every line in a lines.json.
 // Skips lines whose MP3 already exists, so re-running won't burn credits.
 //
 // Usage:
@@ -7,6 +7,10 @@
 //   node scripts/generate-audio.mjs --dry-run     (no API calls, just plan)
 //   node scripts/generate-audio.mjs --force       (re-generate even if file exists)
 //   node scripts/generate-audio.mjs --only=t-     (only IDs starting with prefix)
+//
+// Defaults to Ballycrann (audio/lines.json -> audio/). For Swiper Trouper:
+//   node scripts/extract-lines.mjs
+//   LINES_FILE=abba/voice/lines.json OUT_DIR=abba/voice node scripts/generate-audio.mjs
 
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -14,8 +18,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const AUDIO_DIR = resolve(ROOT, 'audio');
-const LINES_PATH = resolve(AUDIO_DIR, 'lines.json');
+const AUDIO_DIR = resolve(ROOT, process.env.OUT_DIR || 'audio');
+const LINES_PATH = resolve(ROOT, process.env.LINES_FILE || 'audio/lines.json');
 
 const VOICE_ID = process.env.VOICE_ID || 'UwtFVYnvYG6hxAbc4I6T';
 const MODEL_ID = process.env.MODEL_ID || 'eleven_multilingual_v2';
@@ -43,6 +47,8 @@ const entries = Object.entries(lines).filter(([id]) => !onlyPrefix || id.startsW
 const toGenerate = entries.filter(([id]) => force || !existsSync(resolve(AUDIO_DIR, `${id}.mp3`)));
 const totalChars = toGenerate.reduce((sum, [, text]) => sum + text.length, 0);
 
+console.log(`Lines file:      ${LINES_PATH.replace(ROOT + '/', '')}`);
+console.log(`Output:          ${AUDIO_DIR.replace(ROOT + '/', '')}/`);
 console.log(`Voice:           ${VOICE_ID}`);
 console.log(`Model:           ${MODEL_ID}`);
 console.log(`Lines total:     ${entries.length}`);

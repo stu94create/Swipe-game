@@ -3,12 +3,19 @@ name: Generate audio
 on:
   workflow_dispatch:
     inputs:
+      game:
+        description: 'Which game to voice'
+        type: choice
+        options:
+          - ballycrann
+          - swiper-trouper
+        default: ballycrann
       force:
         description: 'Regenerate even if MP3 already exists'
         type: boolean
         default: false
       only:
-        description: 'Prefix match — t- = all tutorial, t-mini = mini-scene only, w-bridie = that one place. Leave blank for all.'
+        description: 'Prefix match on line IDs — Ballycrann: t- = all tutorial, w-bridie = that one place. Swiper Trouper: q- = questions, f- = quiz, cue- = bare commands. Blank for all.'
         type: string
         default: ''
 
@@ -25,9 +32,18 @@ jobs:
         with:
           node-version: '20'
 
+      # Swiper Trouper keeps its wording inside abba/index.html, so lines.json
+      # is rebuilt from it first. This also fails the run on a line ID that is
+      # asked for but undefined, before any credits are spent.
+      - name: Rebuild Swiper Trouper lines.json
+        if: inputs.game == 'swiper-trouper'
+        run: node scripts/extract-lines.mjs
+
       - name: Run generator
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          LINES_FILE: ${{ inputs.game == 'swiper-trouper' && 'abba/voice/lines.json' || 'audio/lines.json' }}
+          OUT_DIR: ${{ inputs.game == 'swiper-trouper' && 'abba/voice' || 'audio' }}
         run: |
           args=()
           if [ "${{ inputs.force }}" = "true" ]; then args+=(--force); fi
@@ -35,13 +51,15 @@ jobs:
           node scripts/generate-audio.mjs "${args[@]}"
 
       - name: Commit and push
+        env:
+          OUT_DIR: ${{ inputs.game == 'swiper-trouper' && 'abba/voice' || 'audio' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add audio/
+          git add "$OUT_DIR"
           if git diff --staged --quiet; then
             echo "No audio changes to commit."
           else
-            git commit -m "Generate audio with ElevenLabs"
+            git commit -m "Generate ${{ inputs.game }} audio with ElevenLabs"
             git push
           fi

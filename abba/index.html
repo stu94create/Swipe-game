@@ -566,7 +566,7 @@
   };
 
   /* ======================= sound engine ======================= */
-  let ac, master, musicGain, voiceBus, graphAudio = false;
+  let ac, master, musicGain, voiceBus, musicRouted = false, voiceRouted = false;
   const ctx = () => {
     if (!ac) {
       ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -587,21 +587,28 @@
   // track mastered to -14, so at equal gain she sits *under* the music. On the
   // bus she can be lifted, with a compressor catching the peaks that lift
   // would otherwise push into clipping.
+  // Built as two independent halves on purpose: routing a media element is the
+  // part most likely to fail on iOS, and if it took the voice bus down with it
+  // she would lose her boost on the very device that needs it.
   function buildBuses() {
+    // Voice goes straight to the output rather than through master, so nothing
+    // else's level can pull her down. The limiter catches the peaks the boost
+    // would otherwise push past full scale.
     try {
-      musicGain = ac.createGain(); musicGain.gain.value = 0.0001; musicGain.connect(master);
-      ac.createMediaElementSource(music).connect(musicGain);
-      music.volume = 1;                     // level is the bus's job now
-
       const limiter = ac.createDynamicsCompressor();
       limiter.threshold.value = -6; limiter.knee.value = 3; limiter.ratio.value = 12;
       limiter.attack.value = 0.003; limiter.release.value = 0.12;
       voiceBus = ac.createGain(); voiceBus.gain.value = VOICE_GAIN;
-      voiceBus.connect(limiter); limiter.connect(master);
-      graphAudio = true;
-    } catch (_) {
-      graphAudio = false;                   // fall back to element volume
-    }
+      voiceBus.connect(limiter); limiter.connect(ac.destination);
+      voiceRouted = true;
+    } catch (_) { voiceRouted = false; }
+
+    try {
+      musicGain = ac.createGain(); musicGain.gain.value = 0.0001; musicGain.connect(master);
+      ac.createMediaElementSource(music).connect(musicGain);
+      music.volume = 1;                     // level is the bus's job now
+      musicRouted = true;
+    } catch (_) { musicRouted = false; }    // fall back to element volume
   }
   const out = (node, pan) => {
     const a = ctx();
@@ -705,15 +712,15 @@
   const BPM = 120;                                  // set to your track's actual tempo
   // VOL/DUCK are bus gains, multiplied by master (0.9). VOL lands where the old
   // element volume of 0.28 sat; DUCK drops the track ~23 dB under it so the
-  // voice is unmistakably on top. VOICE_GAIN is +8 dB, which puts the loudest
-  // clip's peak just under full scale before the limiter.
-  const RATE = [1, 1.04, 1.09, 1.15], VOL = 0.30, DUCK = 0.07, VOICE_GAIN = 2.6;
+  // voice is unmistakably on top. VOICE_GAIN is +12 dB on clips that arrive
+  // around -24 dBFS, taking her to about -11; the limiter holds the peaks.
+  const RATE = [1, 1.04, 1.09, 1.15], VOL = 0.30, DUCK = 0.07, VOICE_GAIN = 4;
   const music = new Audio('audio/track.mp3');
   music.loop = true; music.preload = 'auto'; music.volume = 0;
   let ducked = false, playing = false, musicEnabled = true;
   const musicWanted = () => musicEnabled;
   function setMusicLevel(target, ms) {
-    if (graphAudio) {
+    if (musicRouted) {
       const t = ac.currentTime, g = musicGain.gain;
       g.cancelScheduledValues(t);
       g.setValueAtTime(Math.max(0.0001, g.value), t);
@@ -788,14 +795,15 @@
   }
   // Read-only view of the mix, for checking levels from the console.
   if (typeof window !== 'undefined') window.SWIPER_MIX = () => ({
-    graphAudio, ducked, playing,
-    musicGain: graphAudio ? +musicGain.gain.value.toFixed(4) : music.volume,
-    voiceGain: graphAudio ? voiceBus.gain.value : 1,
+    musicRouted, voiceRouted, ducked, playing,
+    musicGain: musicRouted ? +musicGain.gain.value.toFixed(4) : music.volume,
+    voiceGain: voiceRouted ? voiceBus.gain.value : 1,
+    clipsDecoded: clipCache.size,
     elementVolume: music.volume,
   });
   function stopMusic() {
     music.pause(); music.currentTime = 0;
-    if (graphAudio) { musicGain.gain.cancelScheduledValues(ac.currentTime); musicGain.gain.value = 0.0001; }
+    if (musicRouted) { musicGain.gain.cancelScheduledValues(ac.currentTime); musicGain.gain.value = 0.0001; }
     else music.volume = 0;
     playing = false; stopLayers(); layerLevel = 0;
   }
@@ -814,49 +822,70 @@
   }
   if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
   const feedback = $('#feedback');
-  let sayToken = 0, clipPlaying = null, clipCleanup = null;
+  let sayToken = 0, clipPlaying = null, clipSource = null;
+  // Clips play as decoded buffers rather than <audio> elements. Routing an
+  // element through the graph is the least dependable corner of iOS Safari,
+  // and it is the only way an element can be lifted above volume 1 — a buffer
+  // source has neither problem. Decoded buffers are kept, so a line repeated
+  // later in the game costs nothing.
+  const clipCache = new Map();
+  const decode = data => new Promise((ok, no) => {
+    const p = ac.decodeAudioData(data, ok, no);          // Safari wants the callbacks
+    if (p && p.then) p.then(ok, no);
+  });
+  async function loadClip(file) {
+    if (clipCache.has(file)) return clipCache.get(file);
+    const r = await fetch(file);
+    if (!r.ok) throw new Error('no clip');
+    const buf = await decode(await r.arrayBuffer());
+    clipCache.set(file, buf);
+    return buf;
+  }
+
   function speakOne(line, rate, token) {
     return new Promise(res => {
       const file = line.i ? `voice/${line.i}.mp3` : null;
-      if (file && !missing.has(file)) {
-        const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
-        // On the voice bus she can be lifted above what an element allows.
-        let node = null;
-        if (graphAudio) {
-          try { node = ac.createMediaElementSource(a); node.connect(voiceBus); }
-          catch (_) { node = null; }
-        }
-        let guard = null;
-        const cleanup = () => {
-          if (guard) { clearTimeout(guard); guard = null; }
-          if (node) { try { node.disconnect(); } catch (_) {} node = null; }
-        };
-        clipCleanup = cleanup;
-        // A clip that never loads must not leave the game waiting for ever.
-        guard = setTimeout(() => { cleanup(); res(); }, 20000);
-        // A missing clip fires BOTH the error event and the play() rejection,
-        // so the fallback has to be one-shot or the line gets spoken twice.
-        let fellBack = false;
-        const fallback = err => {
-          if (fellBack) return;
-          fellBack = true;
-          cleanup(); clipPlaying = null;
-          // Answering early cuts a clip off mid-word, which rejects play() too.
-          // That is not a missing clip: stay quiet and let the next line run,
-          // rather than reading the abandoned one out in the browser voice and
-          // writing the file off as absent for the rest of the session.
-          if (token !== sayToken || (err && err.name === 'AbortError')) return res();
-          missing.add(file);
-          speakTts(line.t, rate).then(res);
-        };
-        a.addEventListener('ended', () => { cleanup(); res(); });
-        a.addEventListener('error', () => fallback());
-        a.play().catch(fallback);
-        return;
-      }
-      speakTts(line.t, rate).then(res);
+      if (!file || missing.has(file)) return speakTts(line.t, rate).then(res);
+      if (!voiceRouted) return playClipElement(file, line, rate, token, res);
+
+      loadClip(file).then(buf => {
+        if (token !== sayToken) return res();            // a new line got in first
+        const src = ac.createBufferSource();
+        src.buffer = buf; src.playbackRate.value = rate;
+        src.connect(voiceBus);
+        clipSource = src;
+        // If the context is interrupted mid-clip, onended never comes and the
+        // game would wait for ever, so give every clip a deadline.
+        const guard = setTimeout(() => { if (clipSource === src) clipSource = null; res(); },
+                                 (buf.duration / rate) * 1000 + 3000);
+        src.onended = () => { clearTimeout(guard); if (clipSource === src) clipSource = null; res(); };
+        src.start();
+      }).catch(() => {
+        missing.add(file);
+        speakTts(line.t, rate).then(res);
+      });
     });
   }
+
+  // Only when the graph is unavailable: no boost is possible here, but it is
+  // better than dropping to the robot voice.
+  function playClipElement(file, line, rate, token, res) {
+    const a = new Audio(file); a.playbackRate = rate; clipPlaying = a;
+    let fellBack = false;
+    const fallback = err => {
+      if (fellBack) return;
+      fellBack = true;
+      clipPlaying = null;
+      // Answering early aborts playback; that is not a missing clip.
+      if (token !== sayToken || (err && err.name === 'AbortError')) return res();
+      missing.add(file);
+      speakTts(line.t, rate).then(res);
+    };
+    a.addEventListener('ended', () => res());
+    a.addEventListener('error', () => fallback());
+    a.play().catch(fallback);
+  }
+
   function speakTts(text, rate) {
     return new Promise(res => {
       if (!('speechSynthesis' in window)) return setTimeout(res, 500 + text.length * 40);
@@ -869,12 +898,12 @@
   function stopVoice() {
     speechSynthesis?.cancel();
     if (clipPlaying) { clipPlaying.pause(); clipPlaying = null; }
-    if (clipCleanup) { clipCleanup(); clipCleanup = null; }
+    if (clipSource) { const s = clipSource; clipSource = null; s.onended = null; try { s.stop(); } catch (_) {} }
   }
   // Accepts spoken lines, or bare strings for text assembled at runtime.
   async function say(parts) {
     parts = [].concat(parts).filter(Boolean).map(p => typeof p === 'string' ? { t: p } : p);
-    const my = ++sayToken; stopVoice();
+    const my = ++sayToken; stopVoice(); ctx();   // resume if iOS suspended us
     feedback.textContent = parts.map(p => p.t).join(' ');
     duck(true);
     const rate = [1, 1.03, 1.07, 1.13][state.level] || 1;

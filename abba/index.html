@@ -835,11 +835,38 @@
   });
   async function loadClip(file) {
     if (clipCache.has(file)) return clipCache.get(file);
-    const r = await fetch(file);
-    if (!r.ok) throw new Error('no clip');
-    const buf = await decode(await r.arrayBuffer());
-    clipCache.set(file, buf);
-    return buf;
+    let last;
+    for (let attempt = 0; attempt < 2; attempt++) {   // one retry: phones drop requests
+      try {
+        const r = await fetch(file);
+        if (r.status === 404) { const e = new Error('absent'); e.absent = true; throw e; }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const buf = await decode(await r.arrayBuffer());
+        clipCache.set(file, buf);
+        return buf;
+      } catch (e) {
+        if (e.absent) throw e;
+        last = e;                                     // a blip, not a missing file
+      }
+    }
+    throw last;
+  }
+
+  // Warm the clips a round is about to need. A dropped request on a phone used
+  // to cost that line its voice for the rest of the game; fetching ahead, off
+  // the critical path, means a blip has time to be retried before she speaks.
+  function prefetch(lines) {
+    let i = 0;
+    const pump = () => {
+      while (i < lines.length) {
+        const l = lines[i++];
+        if (!l || !l.i) continue;
+        const file = `voice/${l.i}.mp3`;
+        if (clipCache.has(file) || missing.has(file)) continue;
+        return loadClip(file).catch(() => {}).then(pump);
+      }
+    };
+    for (let n = 0; n < 3; n++) pump();               // three at a time, politely
   }
 
   function speakOne(line, rate, token) {
@@ -860,8 +887,9 @@
                                  (buf.duration / rate) * 1000 + 3000);
         src.onended = () => { clearTimeout(guard); if (clipSource === src) clipSource = null; res(); };
         src.start();
-      }).catch(() => {
-        missing.add(file);
+      }).catch(err => {
+        // Only write a clip off when the server says it is genuinely not there.
+        if (err && err.absent) missing.add(file);
         speakTts(line.t, rate).then(res);
       });
     });
@@ -939,6 +967,9 @@
   async function startRound() {
     const r = cur(); state.level = r.level; state.idx = 0;
     $('#roundLabel').textContent = r.name; unlock(r.gestures); $('#qtext').textContent = r.name;
+    // everything this round will say, plus the replies that come up constantly
+    prefetch([r.intro, r.hint, ...r.items.flatMap(it => [it.line, it.fact]),
+      ...praise, ...ack, ...ALL.map(g => T(`m-${g}`))]);
     if (r.crowd) { sfx.crowd(3.2); await wait(2600); if (state.screen !== 'play') return; }
     setIntensity(r.level); sfx.sting(r.level);
     await wait(r.level >= 2 ? 900 : 700);

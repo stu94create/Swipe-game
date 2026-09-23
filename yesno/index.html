@@ -306,52 +306,144 @@
 
 <script>
 /* ============================ Question pool ============================ */
-// `text` shows on the card; `say` is what the voice reads aloud. Each game
-// randomly draws ROUND_SIZE of these, so every play-through is a fresh mix.
+// Everyday preferences, so there are no right answers. Each entry is
+// [question, reply to a yes, reply to a no]. The question is shown on the card
+// and read aloud; the reply is said straight after the swipe. Every reply opens
+// with "Yes" or "No" so the player hears at once which way the swipe went, and
+// a "no" is never made to sound like the wrong answer.
+// Each game randomly draws ROUND_SIZE of these, so every play-through is a
+// fresh mix.
 const ROUND_SIZE = 10;
 const QUESTION_POOL = [
-  { text: 'Do you love Dolly Parton?',                 say: 'Do you love Dolly Parton?' },
-  { text: 'Is Friday night made for two-steppin’?',    say: 'Is Friday night made for two steppin?' },
-  { text: 'Would you rather ride a horse than drive a truck?', say: 'Would you rather ride a horse than drive a truck?' },
-  { text: 'Are cowboy boots the best boots?',          say: 'Are cowboy boots the best boots?' },
-  { text: 'Does a slow country ballad beat a pop song?', say: 'Does a slow country ballad beat a pop song every time?' },
-  { text: 'Is sweet tea better than soda?',            say: 'Is sweet tea better than soda?' },
-  { text: 'Would you dance in the kitchen right now?', say: 'Would you dance in the kitchen if your song came on right now?' },
-  { text: 'Is a front porch the finest seat in the house?', say: 'Is a front porch the finest seat in the house?' },
-  { text: 'Know all the words to a Johnny Cash tune?', say: 'Do you know all the words to at least one Johnny Cash tune?' },
-  { text: 'Is Willie Nelson a national treasure?',     say: 'Is Willie Nelson a national treasure?' },
-  { text: 'Would you two-step at a wedding?',          say: 'Would you two step at a wedding?' },
-  { text: 'Do you sing in the car with the windows down?', say: 'Do you sing in the car with the windows down?' },
-  { text: 'Is a bonfire better than a fancy night out?', say: 'Is a bonfire better than a fancy night out?' },
-  { text: 'Could you happily live on a ranch?',        say: 'Could you happily live on a ranch?' },
-  { text: 'Do you tear up at a good country love song?', say: 'Do you tear up at a good country love song?' },
-  { text: 'Is Shania Twain still the queen?',          say: 'Is Shania Twain still the queen?' },
-  { text: 'Would you wear a cowboy hat out to dinner?', say: 'Would you wear a cowboy hat out to dinner?' },
-  { text: 'Do you believe in love at first sight?',    say: 'Do you believe in love at first sight?' },
-  { text: 'Is a pickup truck a fine spot for a first date?', say: 'Is a pickup truck a fine place for a first date?' },
-  { text: 'Would you learn to line dance?',            say: 'Would you learn to line dance?' },
-  { text: 'Is homemade pie better than store-bought?', say: 'Is homemade pie better than store bought?' },
-  { text: 'Is George Strait the King of Country?',     say: 'Is George Strait the King of Country?' },
-  { text: 'Would you name a dog after a country singer?', say: 'Would you name a dog after a country singer?' },
-  { text: 'Do fireflies beat fireworks?',              say: 'Do fireflies beat fireworks?' },
-  { text: 'Could you square dance if the band struck up?', say: 'Could you square dance if the band struck up right now?' },
-  { text: 'Is a starry night better than a movie?',    say: 'Is a starry night better than a movie?' },
-  { text: 'Would you sing karaoke country to a crowd?', say: 'Would you sing karaoke country in front of a crowd?' },
-  { text: 'Does every good story need a little heartbreak?', say: 'Does every good story need a little heartbreak?' },
-  { text: 'Is Loretta Lynn a legend?',                 say: 'Is Loretta Lynn a legend?' },
-  { text: 'Would you slow dance in the living room tonight?', say: 'Would you slow dance in the living room tonight?' },
-  { text: 'Is the banjo underrated?',                  say: 'Is the banjo an underrated instrument?' },
-  { text: 'Do you prefer a handwritten letter to a text?', say: 'Do you prefer a handwritten letter to a text?' },
-  { text: 'Are good boots worth the splurge?',         say: 'Is a good pair of boots worth the splurge?' },
-  { text: 'Do you like your coffee strong and black?', say: 'Do you like your coffee strong and black?' },
-  { text: 'Is a mason jar a perfectly good glass?',    say: 'Is a mason jar a perfectly good drinking glass?' },
-  { text: 'Would you road-trip with no map and no plan?', say: 'Would you take a road trip with no map and no plan?' },
-  { text: 'Is Kacey Musgraves worth a listen?',        say: 'Is Kacey Musgraves worth a listen?' },
-  { text: 'Can a good song fix a bad day?',            say: 'Do you believe a good song can fix a bad day?' },
+  // Music
+  ['Do you like listening to music?',            'Yes! Music makes everything better.',             'No? Well, a bit of quiet is nice too.'],
+  ['Do you like Dolly Parton?',                  'Yes! Dolly is a darlin’, isn’t she?',             'No? Fair enough, she’s not for everyone.'],
+  ['Do you like Dolly Parton’s songs?',          'Yes! Nine to five, what a way to make a livin’!', 'No? That’s alright, plenty more songs out there.'],
+  ['Do you like pop music?',                     'Yes! Something catchy to hum along to.',          'No? Pop’s not your cup of tea then.'],
+  ['Do you like music from the 80s?',            'Yes! Big hair and big tunes!',                    'No? The 80s can stay in the 80s then.'],
+  ['Do you like country music?',                 'Yes! Now you’re talkin’ my language!',            'No? Well, I won’t hold it against you, partner.'],
+  ['Do you like songs you can dance to?',        'Yes! Get those boots movin’!',                    'No? Sittin’ this one out, fair enough.'],
+  ['Do you like slow songs?',                    'Yes! Nice and gentle.',                           'No? You like a bit more get up and go.'],
+  ['Do you like singing along to songs?',        'Yes! Let’s hear that voice!',                     'No? Happy just to listen, that’s fine.'],
+  ['Do you like listening to music on your phone?', 'Yes! Music right in your pocket.',             'No? Your phone can stay quiet then.'],
+  ['Do you like choosing the next song?',        'Yes! You’re in charge of the tunes.',             'No? Someone else can pick, that’s alright.'],
+  ['Do you like listening to music in the morning?', 'Yes! A good tune to start the day.',          'No? Mornings are for peace and quiet.'],
+  ['Do you like listening to music in the evening?', 'Yes! Wind down with a song.',                 'No? Evenings nice and quiet then.'],
+  ['Do you like hearing a song you know?',       'Yes! Nothin’ like an old favourite.',             'No? Always after somethin’ different.'],
+  ['Do you like trying a new song?',             'Yes! Somethin’ fresh, I like it.',                'No? Stick with what you know, fair enough.'],
+  ['Do you like hearing a woman sing?',          'Yes! A good strong voice.',                       'No? That’s alright, darlin’.'],
+  ['Do you like hearing a man sing?',            'Yes! Nice and deep.',                             'No? That’s alright, darlin’.'],
+  ['Do you like songs with a guitar?',           'Yes! Strum it, cowboy!',                          'No? Guitars aren’t your thing, fair enough.'],
+  ['Do you like songs with a piano?',            'Yes! Tinkle those keys!',                         'No? We’ll leave the piano be.'],
+  ['Do you like music played loudly?',           'Yes! Turn it up!',                                'No? Nice and soft it is.'],
+  // Going out
+  ['Do you like going to the cinema?',           'Yes! Popcorn and a big screen.',                  'No? The cinema’s not for you, that’s fine.'],
+  ['Do you like going bowling?',                 'Yes! Strike!',                                    'No? We’ll leave the bowling pins alone.'],
+  ['Do you like going to the pub?',              'Yes! Pull up a stool, partner.',                  'No? The pub’s not your spot, fair enough.'],
+  ['Do you like going out for dinner?',          'Yes! Someone else does the cookin’.',             'No? Dinner at home suits you.'],
+  ['Do you like going to a café?',               'Yes! A little treat and a sit down.',             'No? Cafés aren’t your thing then.'],
+  ['Do you like going for a walk?',              'Yes! Stretch those legs.',                        'No? Walks aren’t for you, that’s alright.'],
+  ['Do you like going shopping?',                'Yes! Let’s hit the shops!',                       'No? Keep your purse in your pocket then.'],
+  ['Do you like visiting friends?',              'Yes! Good company is the best.',                  'No? That’s alright, darlin’.'],
+  ['Do you like going to a party?',              'Yes! Let’s get this party started!',              'No? Not one for parties, fair enough.'],
+  ['Do you like going to a concert?',            'Yes! Live music, can’t beat it.',                 'No? Too loud and busy, I hear you.'],
+  ['Do you like going to a garden centre?',      'Yes! All those lovely plants.',                   'No? Garden centres aren’t for you then.'],
+  ['Do you like going to the park?',             'Yes! Fresh air and green grass.',                 'No? The park can wait.'],
+  ['Do you like going out on a sunny day?',      'Yes! Soak up that sunshine.',                     'No? Too bright out there, fair enough.'],
+  ['Do you like going for a drive?',             'Yes! Roll down the windows!',                     'No? Car rides aren’t for you, that’s fine.'],
+  ['Do you like going somewhere new?',           'Yes! A little adventure.',                        'No? Familiar places suit you best.'],
+  // Food and drink
+  ['Do you like coffee?',                        'Yes! A good cup of joe.',                         'No? No coffee for you then.'],
+  ['Do you like tea?',                           'Yes! Put the kettle on!',                         'No? Tea’s not your thing, fair enough.'],
+  ['Do you like hot chocolate?',                 'Yes! Warm and sweet.',                            'No? We’ll skip the hot chocolate.'],
+  ['Do you like a glass of wine?',               'Yes! Cheers, darlin’!',                           'No? That’s alright, somethin’ else then.'],
+  ['Do you like orange juice?',                  'Yes! Nice and fresh.',                            'No? Orange juice is off the menu.'],
+  ['Do you like chocolate?',                     'Yes! Who doesn’t love a bit of chocolate?',       'No? More for me then!'],
+  ['Do you like ice cream?',                     'Yes! A big scoop for you.',                       'No? Too cold, I get it.'],
+  ['Do you like cake?',                          'Yes! Let’s have a slice.',                        'No? No cake then, fair enough.'],
+  ['Do you like biscuits?',                      'Yes! One with a cuppa.',                          'No? The biscuit tin stays shut then.'],
+  ['Do you like pizza?',                         'Yes! Pass me a slice.',                           'No? Pizza’s not for you, that’s fine.'],
+  ['Do you like chips?',                         'Yes! Hot and salty.',                             'No? We’ll skip the chips.'],
+  ['Do you like pasta?',                         'Yes! A big bowl of pasta.',                       'No? Pasta’s not your thing then.'],
+  ['Do you like sandwiches?',                    'Yes! A good sandwich hits the spot.',             'No? Sandwiches aren’t for you, fair enough.'],
+  ['Do you like strawberries?',                  'Yes! Sweet and juicy.',                           'No? Strawberries aren’t for you then.'],
+  ['Do you like eating dinner with other people?', 'Yes! Food tastes better with company.',         'No? A quiet dinner suits you.'],
+  // Flowers and gardening
+  ['Do you like flowers?',                       'Yes! Pretty as a picture.',                       'No? Flowers aren’t your thing, that’s fine.'],
+  ['Do you like roses?',                         'Yes! A classic.',                                 'No? Roses aren’t for you then.'],
+  ['Do you like the smell of flowers?',          'Yes! Smells like springtime.',                    'No? Not keen on the smell, fair enough.'],
+  ['Do you like holding a bunch of flowers?',    'Yes! A lovely bunch for you.',                    'No? We’ll leave the flowers in the vase.'],
+  ['Do you like picking flowers for a vase?',    'Yes! Brighten up the room.',                      'No? The flowers can stay in the garden.'],
+  ['Do you like spending time in a garden?',     'Yes! Nothin’ like a bit of green.',               'No? The garden’s not for you, that’s alright.'],
+  ['Do you like helping in the garden?',         'Yes! Green fingers!',                             'No? Someone else can do the diggin’.'],
+  ['Do you like watering plants?',               'Yes! Give ’em a good drink.',                     'No? The plants can wait.'],
+  ['Do you like planting seeds?',                'Yes! Watch ’em grow.',                            'No? We’ll leave the seeds be.'],
+  ['Do you like feeling the leaves on a plant?', 'Yes! Soft and cool.',                             'No? Hands off the leaves then.'],
+  ['Do you like the smell of fresh grass?',      'Yes! Smells like summer.',                        'No? Not keen on grass, fair enough.'],
+  ['Do you like sitting outside?',               'Yes! Pull up a chair on the porch.',              'No? Cosy inside suits you.'],
+  ['Do you like hearing birds in the garden?',   'Yes! Tweet tweet!',                               'No? The birds can keep it down then.'],
+  ['Do you like feeling the sun on your face?',  'Yes! Warm and lovely.',                           'No? You like the shade, fair enough.'],
+  ['Do you like hearing rain outside?',          'Yes! Pitter patter.',                             'No? Rain’s not for you then.'],
+  // Things to do
+  ['Do you like dancing?',                       'Yes! Grab your partner!',                         'No? Sittin’ this one out, that’s fine.'],
+  ['Do you like dancing to Dolly Parton?',       'Yes! Dance like Dolly’s watchin’!',               'No? Dolly will dance on her own then.'],
+  ['Do you like singing?',                       'Yes! Sing it loud!',                              'No? Happy to listen, that’s alright.'],
+  ['Do you like clapping along to music?',       'Yes! Clap those hands!',                          'No? Hands in your lap then.'],
+  ['Do you like playing games?',                 'Yes! Like this one!',                             'No? Well, thanks for playin’ this one!'],
+  ['Do you like telling jokes?',                 'Yes! You’re a funny one.',                        'No? You’ll leave the jokes to me then.'],
+  ['Do you like hearing a funny story?',         'Yes! A good laugh.',                              'No? Funny stories aren’t for you then.'],
+  ['Do you like talking with friends?',          'Yes! A good natter.',                             'No? That’s alright, darlin’.'],
+  ['Do you like making a phone call?',           'Yes! Ring ring!',                                 'No? Phone calls aren’t for you, fair enough.'],
+  ['Do you like taking a photo?',                'Yes! Say cheese!',                                'No? Camera shy, that’s alright.'],
+  ['Do you like listening to a story?',          'Yes! Once upon a time.',                          'No? Stories aren’t for you then.'],
+  ['Do you like watching a film?',               'Yes! Grab the popcorn.',                          'No? Films aren’t your thing, that’s fine.'],
+  ['Do you like watching a comedy?',             'Yes! A good giggle.',                             'No? Comedies aren’t for you then.'],
+  ['Do you like watching a musical?',            'Yes! Singin’ and dancin’!',                       'No? Musicals aren’t for you, fair enough.'],
+  ['Do you like having a quiet afternoon?',      'Yes! Put your feet up.',                          'No? You like to keep busy.'],
+  // Touch, sounds and everyday choices
+  ['Do you like soft blankets?',                 'Yes! Snug as a bug.',                             'No? Blankets aren’t for you then.'],
+  ['Do you like holding a warm mug?',            'Yes! Warms your hands right up.',                 'No? Not keen on a warm mug, fair enough.'],
+  ['Do you like feeling sand in your hands?',    'Yes! Like a day at the beach.',                   'No? Sand gets everywhere, I hear you.'],
+  ['Do you like touching smooth stones?',        'Yes! Smooth and cool.',                           'No? We’ll leave the stones be.'],
+  ['Do you like the feel of a soft cushion?',    'Yes! Nice and comfy.',                            'No? Cushions aren’t for you then.'],
+  ['Do you like the sound of the sea?',          'Yes! Those waves are lovely.',                    'No? The sea’s not for you, fair enough.'],
+  ['Do you like hearing people laugh?',          'Yes! Laughter is the best.',                      'No? That’s alright, darlin’.'],
+  ['Do you like the sound of a guitar?',         'Yes! Strum along, partner.',                      'No? We’ll put the guitar down then.'],
+  ['Do you like the smell of fresh coffee?',     'Yes! Wakes you right up.',                        'No? Not keen on the coffee smell, fair enough.'],
+  ['Do you like the smell of baking?',           'Yes! Somethin’ good in the oven.',                'No? Baking smells aren’t for you then.'],
+  ['Do you like warm weather?',                  'Yes! Hot as a Texas summer.',                     'No? You like it cooler, fair enough.'],
+  ['Do you like a cool breeze?',                 'Yes! Nice and fresh.',                            'No? Too chilly for you, I get it.'],
+  ['Do you like mornings?',                      'Yes! Rise and shine!',                            'No? Not a mornin’ person, me neither.'],
+  ['Do you like evenings?',                      'Yes! Wind down time.',                            'No? Evenings aren’t for you then.'],
+  ['Do you like weekends?',                      'Yes! Time to kick back.',                         'No? Weekends aren’t for you, fair enough.'],
+  ['Do you like having visitors?',               'Yes! The more the merrier.',                      'No? A bit of peace and quiet suits you.'],
+  ['Do you like being at home?',                 'Yes! Home sweet home.',                           'No? You like to be out and about.'],
+  ['Do you like getting dressed up?',            'Yes! Lookin’ sharp!',                             'No? Keep it simple, that’s fine.'],
+  ['Do you like wearing comfortable clothes?',   'Yes! Comfy is best.',                             'No? You like to look smart.'],
+  ['Do you like choosing what music plays?',     'Yes! You pick the tunes, darlin’.',               'No? Someone else can choose, that’s alright.'],
+].map(([text, yes, no]) => ({ text, yes, no }));
+// Hand-picked set for the first trials. While it has questions in it, every
+// game plays exactly these, in this order, instead of a random draw. Swap in
+// the ten that matter most to Polly; empty it (`[]`) to use the random pool.
+const TRIAL_QUESTIONS = [
+  'Do you like listening to music?',
+  'Do you like Dolly Parton?',
+  'Do you like dancing?',
+  'Do you like flowers?',
+  'Do you like spending time in a garden?',
+  'Do you like coffee?',
+  'Do you like chocolate?',
+  'Do you like going for a walk?',
+  'Do you like talking with friends?',
+  'Do you like feeling the sun on your face?',
 ];
-// The active round — a random, non-repeating draw from the pool.
+// The active round.
 let deck = [];
 function pickRound() {
+  if (TRIAL_QUESTIONS.length) {
+    deck = TRIAL_QUESTIONS.map(t => QUESTION_POOL.find(q => q.text === t)).filter(Boolean);
+    return;
+  }
   const shuffled = QUESTION_POOL.slice();
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -359,9 +451,7 @@ function pickRound() {
   }
   deck = shuffled.slice(0, Math.min(ROUND_SIZE, shuffled.length));
 }
-const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
-const YES_LINES = ['Yee-haw! I knew it.', 'Well alright! That\'s a yes.', 'Now we\'re talkin.'];
-const NO_LINES  = ['Aw, alright then. A no it is.', 'Ha! Fair enough, darlin.', 'No? Well, more for me.'];
+const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. There are no right or wrong answers. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
 
 /* ============================ Gesture tunables ============================ */
 const SWIPE_MIN_DISTANCE = 34;   // px — needs a real swipe, not a tap
@@ -506,7 +596,6 @@ let index = 0;
 let answers = [];          // 'yes' | 'no'
 let acceptingInput = false;
 let transitioning = false;
-let yesCursor = 0, noCursor = 0;
 
 function buildProgress() {
   const wrap = document.getElementById('progress');
@@ -537,7 +626,7 @@ function showQuestion() {
   card.className = 'card';
   transitioning = false;
   acceptingInput = false;   // no answers until the question has been read
-  speakLine(q.say, () => { acceptingInput = true; });
+  speakLine(q.text, () => { acceptingInput = true; });
   // Safety: if speech never fires (e.g. muted device), open input anyway.
   setTimeout(() => { acceptingInput = true; }, 2600);
 }
@@ -561,10 +650,9 @@ function answer(kind) {
   flashVerdict(kind);
   chimes[kind]();
 
-  // Rotating spoken reaction, then advance.
-  let reaction;
-  if (kind === 'yes') { reaction = YES_LINES[yesCursor % YES_LINES.length]; yesCursor++; }
-  else                { reaction = NO_LINES[noCursor % NO_LINES.length]; noCursor++; }
+  // Say this question's own reply (it opens with "Yes" or "No", so the player
+  // hears which way the swipe registered), then advance.
+  const reaction = deck[index][kind];
 
   let advanced = false;
   const go = () => {
@@ -574,8 +662,9 @@ function answer(kind) {
     if (index >= deck.length) finish();
     else showQuestion();
   };
+  // No separate timer: speakLine's watchdog guarantees `go` runs, and a fixed
+  // one would cut the longer replies off mid-sentence.
   speakLine(reaction, go);
-  setTimeout(go, 2200);   // fallback pacing so we never stall
 }
 
 function finish() {
@@ -595,8 +684,7 @@ const REPLAY_LINE = "Alright, here we go again! Swipe left for yes, right for no
 function startGame() {
   index = 0;
   answers = [];
-  yesCursor = 0; noCursor = 0;
-  pickRound();                 // fresh random 10 for this play-through
+  pickRound();                 // trial set, or a fresh random 10
   // Neutralise the card so no leftover question lingers while the opening plays.
   document.getElementById('questionText').textContent = '…';
   document.getElementById('card').className = 'card';

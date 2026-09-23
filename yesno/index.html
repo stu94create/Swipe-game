@@ -302,6 +302,10 @@
   <div class="verdict" id="verdict"></div>
 
 <script>
+// @voice-lines-begin
+// Everything between these markers is plain JavaScript with no page access:
+// scripts/extract-yesno-lines.mjs runs it on its own to list every spoken line
+// for the audio generator. Keep anything the voice says in here.
 /* ============================ Question pool ============================ */
 // Everyday preferences, so there are no right answers. Each entry is
 // [question, reply to a yes, reply to a no]. The question is shown on the card
@@ -419,6 +423,47 @@ const QUESTION_POOL = [
   ['Do you like wearing comfortable clothes?',   'Yes! Comfy is best.',                             'No? You like to look smart.'],
   ['Do you like choosing what music plays?',     'Yes! You pick the tunes, darlin’.',               'No? Someone else can choose, that’s alright.'],
 ].map(([text, yes, no]) => ({ text, yes, no }));
+
+/* ============================ Other spoken lines ============================ */
+const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. There are no right or wrong answers. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
+const REPLAY_LINE = "Alright, here we go again! Swipe left for yes, right for no.";
+// One ending per score, so each can be recorded.
+function endLine(yes, total) {
+  return `And that's the whole hoedown! You said yes to ${yes} out of ${total}. `
+    + `To play again, just tap anywhere on the screen.`;
+}
+
+/* ============================ Voice clip names ============================ */
+// Each line's recording is voice/<id>.mp3, where the id is made from the words
+// themselves: a readable start plus a short fingerprint of the whole line. Reword
+// a line and it gets a new id, so the generator records it afresh and the game
+// can never play an old recording over new words.
+function voiceId(text) {
+  let h = 0x811c9dc5;                       // FNV-1a, 32-bit
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  const slug = text.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+  return `${slug}-${h.toString(16).padStart(8, '0')}`;
+}
+// Every line the game can say, as { id: text }, for the audio generator.
+function allVoiceLines() {
+  const texts = [INTRO_LINE, REPLAY_LINE];
+  for (const q of QUESTION_POOL) texts.push(q.text, q.yes, q.no);
+  for (let yes = 0; yes <= ROUND_SIZE; yes++) texts.push(endLine(yes, ROUND_SIZE));
+  const out = {};
+  for (const t of texts) {
+    const id = voiceId(t);
+    // A line used in two places shares one clip; two different lines landing
+    // on one name would play the wrong words.
+    if (out[id] && out[id] !== t) throw new Error(`Two lines share the clip name ${id}`);
+    out[id] = t;
+  }
+  return out;
+}
+// @voice-lines-end
 // Hand-picked set for trials. While it has questions in it, every game plays
 // exactly these, in this order, instead of a random draw. Leave it empty for
 // the random pool. To use it, list questions exactly as written above, e.g.
@@ -480,8 +525,6 @@ function pickRound() {
   memoryBag = { bag: bag.slice(size), last: dealt };
   saveBag(memoryBag);
 }
-const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. There are no right or wrong answers. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
-
 /* ============================ Gesture tunables ============================ */
 const SWIPE_MIN_DISTANCE = 34;   // px — needs a real swipe, not a tap
 const TAP_MAX_DISTANCE = 10;
@@ -531,9 +574,16 @@ const chimes = {
   done() { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.5, 'triangle', 0.16, i * 0.12)); },
 };
 
-/* ------- Voice: the browser's built-in speech (no external audio) ------- */
+/* ------- Voice: recorded clips, with the browser's speech as a backup ------- */
+// Like Swiper Trouper, every line plays from a recorded clip (voice/<id>.mp3,
+// made by ElevenLabs; see the README) as a decoded buffer through Web Audio,
+// the same way the music plays. The browser's built-in speech is only used
+// for a line that has no clip yet. On iPhone that speech and the music fight
+// over the audio, and the voice was cut off mid-sentence; clips and music
+// share one audio graph, so they play together.
 let speechGen = 0;
 let preferredVoice = null;
+let currentClip = null;
 
 function loadVoices() {
   if (!('speechSynthesis' in window)) return;
@@ -550,6 +600,71 @@ if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
 }
+// iOS keeps speech locked until an utterance is spoken inside a real tap, so
+// spend a silent one on the tap that starts the game, in case a line has to
+// fall back to speech later.
+function warmSpeech() {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(' ');
+  u.volume = 0;
+  speechSynthesis.speak(u);
+}
+
+// The clips come in quiet (around -24 dBFS), so the voice gets its own lift,
+// with a limiter to catch the peaks the lift would push past full scale.
+const VOICE_GAIN = 3;
+let voiceBus = null;
+function getVoiceBus() {
+  if (!voiceBus) {
+    const limiter = audioCtx.createDynamicsCompressor();
+    limiter.threshold.value = -6; limiter.knee.value = 3; limiter.ratio.value = 12;
+    limiter.attack.value = 0.003; limiter.release.value = 0.12;
+    voiceBus = audioCtx.createGain();
+    voiceBus.gain.value = VOICE_GAIN;
+    voiceBus.connect(limiter);
+    limiter.connect(audioCtx.destination);
+  }
+  return voiceBus;
+}
+
+// Decoded clips are kept for a while, so the next question and its replies can
+// be fetched ahead of time. Bounded, since decoded audio is large.
+const CLIP_CACHE_MAX = 24;
+const clipCache = new Map();          // insertion order == least recent first
+const clipsInFlight = new Map();
+const missingClips = new Set();
+function loadClip(text) {
+  if (!audioCtx || !text) return Promise.resolve(null);
+  const id = voiceId(text);
+  if (missingClips.has(id)) return Promise.resolve(null);
+  const hit = clipCache.get(id);
+  if (hit) { clipCache.delete(id); clipCache.set(id, hit); return Promise.resolve(hit); }
+  if (clipsInFlight.has(id)) return clipsInFlight.get(id);
+  const job = fetch(`voice/${id}.mp3`)
+    .then(r => {
+      // Only a clear "not there" writes the clip off; a dropped connection
+      // just means this attempt falls back, and the next one tries again.
+      if (r.status === 404) { missingClips.add(id); return null; }
+      if (!r.ok) return null;
+      return r.arrayBuffer().then(data => new Promise((ok, no) => {
+        const p = audioCtx.decodeAudioData(data, ok, no);   // older Safari wants the callbacks
+        if (p && p.then) p.then(ok, no);
+      }));
+    })
+    .then(buf => {
+      if (buf) {
+        clipCache.set(id, buf);
+        while (clipCache.size > CLIP_CACHE_MAX) clipCache.delete(clipCache.keys().next().value);
+      }
+      return buf;
+    })
+    .catch(() => null)
+    .finally(() => clipsInFlight.delete(id));
+  clipsInFlight.set(id, job);
+  return job;
+}
+function prefetchClips(texts) { texts.forEach(t => { loadClip(t); }); }
+
 function setSpeaking(on) {
   const ind = document.getElementById('speakingIndicator');
   if (ind) ind.classList.toggle('active', on);
@@ -557,13 +672,19 @@ function setSpeaking(on) {
 }
 function cancelCurrent() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (currentClip) {
+    const c = currentClip;
+    currentClip = null;
+    c.onended = null;
+    try { c.stop(); } catch (_) {}
+  }
   setSpeaking(false);
 }
-// Speak a line of text, then call onEnd exactly once. Guarded by speechGen so a
-// new line cancels a stale one's callback. A watchdog guarantees onEnd fires
-// even if the browser never delivers `onend` (a known iOS quirk) — but it's
-// generous and cleared the moment the line really ends, so it never cuts a line
-// short or jumps ahead mid-sentence.
+// Speak a line, then call onEnd exactly once. Guarded by speechGen so a new
+// line cancels a stale one's callback. A watchdog guarantees onEnd fires even
+// if the browser never reports the end (a known iOS quirk, and what happens to
+// a clip if iOS interrupts the audio) — but it's generous and cleared the
+// moment the line really ends, so it never cuts a line short.
 function speakLine(text, onEnd) {
   const myGen = ++speechGen;
   cancelCurrent();
@@ -575,10 +696,29 @@ function speakLine(text, onEnd) {
     setSpeaking(false);
     if (onEnd) onEnd();
   };
-  if (!('speechSynthesis' in window) || !text) {
+  const arm = ms => { if (watchdog) clearTimeout(watchdog); watchdog = setTimeout(done, ms); };
+  if (!text) { arm(1000); return; }
+  // Covers the fetch; replaced by a deadline fitted to the line once it starts.
+  arm(12000);
+  loadClip(text).then(buf => {
+    if (finished || myGen !== speechGen) return;
+    if (!buf) { speakWithBrowser(text, myGen, done, arm); return; }
+    resumeAudio();
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(getVoiceBus());
+    src.onended = () => { if (currentClip === src) currentClip = null; done(); };
+    currentClip = src;
+    arm(buf.duration * 1000 + 3000);
+    setSpeaking(true);
+    src.start();
+  });
+}
+function speakWithBrowser(text, myGen, done, arm) {
+  if (!('speechSynthesis' in window)) {
     // No speech available: hold roughly as long as the line would take to read
     // so the pacing still feels right, then continue.
-    watchdog = setTimeout(done, text ? Math.min(9000, 900 + text.length * 55) : 1000);
+    arm(Math.min(9000, 900 + text.length * 55));
     return;
   }
   // iOS can leave speech stuck in a paused state after something else takes
@@ -590,7 +730,7 @@ function speakLine(text, onEnd) {
   u.onstart = () => { if (myGen === speechGen) setSpeaking(true); };
   u.onend   = done;
   u.onerror = done;
-  watchdog = setTimeout(done, 2500 + text.length * 100);   // safety net only
+  arm(2500 + text.length * 100);   // safety net only
   speechSynthesis.speak(u);
 }
 
@@ -700,6 +840,9 @@ function showQuestion() {
   transitioning = false;
   acceptingInput = false;   // no answers until the question has been read
   speakLine(q.text, () => { acceptingInput = true; });
+  // Have both replies and the next question ready before they're needed.
+  const next = deck[index + 1];
+  prefetchClips(next ? [q.yes, q.no, next.text] : [q.yes, q.no]);
   // Safety: if speech never fires (e.g. muted device), open input anyway —
   // but only for this question, never the one after it.
   const shown = index;
@@ -750,13 +893,10 @@ function finish() {
   document.body.classList.remove('in-game');
   document.body.classList.add('complete');
   // Speak the result AND the replay instruction, since the game is audio-first.
-  const spoken = `And that's the whole hoedown! You said yes to ${yes} out of ${deck.length}. `
-    + `To play again, just tap anywhere on the screen.`;
-  speakLine(spoken);
+  speakLine(endLine(yes, deck.length));
 }
 
 let hasPlayed = false;
-const REPLAY_LINE = "Alright, here we go again! Swipe left for yes, right for no.";
 function startGame() {
   index = 0;
   answers = [];
@@ -775,6 +915,7 @@ function startGame() {
   const opening = hasPlayed ? REPLAY_LINE : INTRO_LINE;
   hasPlayed = true;
   speakLine(opening, () => showQuestion());
+  prefetchClips([deck[0].text]);
 }
 
 /* ============================ Input ============================ */
@@ -818,6 +959,7 @@ document.getElementById('choiceNo').addEventListener('click', () => answer('no')
 // is just the visual affordance). `once` so it only fires the first time.
 document.getElementById('startScreen').addEventListener('click', () => {
   ensureAudio();
+  warmSpeech();
   startMusic();
   startGame();
 }, { once: true });
@@ -827,6 +969,7 @@ document.getElementById('startScreen').addEventListener('click', () => {
 document.getElementById('completeScreen').addEventListener('click', () => {
   if (!document.body.classList.contains('complete')) return;
   ensureAudio();
+  warmSpeech();
   startMusic();
   startGame();
 });

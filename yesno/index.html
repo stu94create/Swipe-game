@@ -461,9 +461,11 @@ let audioCtx = null;
 // start or resume its audio in response to the player touching it.
 function ensureAudio() {
   if (!audioCtx) {
-    // Play like a media app, so the ring/silent switch doesn't mute the music
-    // and chimes (Safari 16.4+; other browsers don't have this and don't need it).
-    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) {}
+    // Leave the page's audio session at its default on purpose. Setting it to
+    // 'playback' (so the silent switch wouldn't mute the music) made it
+    // exclusive on iPhone: the music, starting a moment after the intro, cut
+    // the speech voice off mid-sentence and it never came back. The default
+    // lets the music and the voice play together.
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     // iOS can pause ("interrupt") the context, for instance while the speech
     // voice has the audio. Pick it back up as soon as it's allowed.
@@ -547,6 +549,9 @@ function speakLine(text, onEnd) {
     watchdog = setTimeout(done, text ? Math.min(9000, 900 + text.length * 55) : 1000);
     return;
   }
+  // iOS can leave speech stuck in a paused state after something else takes
+  // the audio; if so, nothing new would ever be heard.
+  if (speechSynthesis.paused) speechSynthesis.resume();
   const u = new SpeechSynthesisUtterance(text);
   if (preferredVoice) u.voice = preferredVoice;
   u.rate = 0.98; u.pitch = 1.0; u.volume = 1.0;

@@ -2,7 +2,8 @@
 
 A tiny, standalone swipe game that lives alongside Ballycrann without touching it.
 A voice asks ten everyday yes-or-no questions (preferences, so there are no right answers); the
-player answers by swiping, and the voice confirms each one with "You chose yes" or "You chose no".
+player answers by swiping, and the voice gives a short reply of its own for that question and
+answer. Every reply starts with "Yes" or "No", so the player hears which way the swipe registered.
 
 **Swipe left for YES, swipe right for NO.** (Arrow keys and the on-screen Yes/No labels work on
 desktop too.)
@@ -22,7 +23,7 @@ yesno/
 
 The narration uses the **browser's built-in speech** (`speechSynthesis`) — no external audio, no
 API keys, nothing to generate. Every spoken line lives inline in `index.html` (the `INTRO_LINE`,
-each question, `YES_LINE` / `NO_LINE`, and the closing line in `finish()`). The answer chimes are tiny
+each question and its two replies, and the closing line in `finish()`). The answer chimes are tiny
 Web-Audio synth plucks. It prefers a warm US-English voice when one is available.
 
 ## Background music
@@ -33,8 +34,10 @@ just without music.
 
 ## Questions
 
-`QUESTION_POOL` in `index.html` holds 100 questions. Each string is both shown on the card and read
-aloud. Each game draws 10 of them at random.
+`QUESTION_POOL` in `index.html` holds 100 questions, each written as
+`[question, reply to a yes, reply to a no]`. The question is shown on the card and read aloud.
+Start each reply with "Yes" or "No", and keep "no" replies accepting: they're preferences, not
+wrong answers. Each game draws 10 of them at random.
 
 `TRIAL_QUESTIONS` is a hand-picked set for early trials. While it has questions in it, every game
 plays exactly those, in that order, and the random pool isn't used. Empty it (`[]`) to switch to the

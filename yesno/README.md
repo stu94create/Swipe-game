@@ -15,16 +15,44 @@ Play it at `/yesno/` once deployed (GitHub Pages serves from the repo root).
 ```
 yesno/
 ├── index.html            The whole game — HTML + CSS + JS in one file
-└── audio/
-    └── country-track.mp3 Looping country instrumental (background music)
+├── audio/
+│   └── country-track.mp3 Looping country instrumental (background music)
+└── voice/
+    ├── lines.json        Generated from index.html — do not edit by hand
+    └── <id>.mp3          One ElevenLabs clip per spoken line
 ```
 
 ## Voice
 
-The narration uses the **browser's built-in speech** (`speechSynthesis`) — no external audio, no
-API keys, nothing to generate. Every spoken line lives inline in `index.html` (the `INTRO_LINE`,
-each question and its two replies, and the closing line in `finish()`). The answer chimes are tiny
-Web-Audio synth plucks. It prefers a warm US-English voice when one is available.
+Like Swiper Trouper, every spoken line plays from a recorded ElevenLabs clip, `voice/<id>.mp3`,
+decoded and played through Web Audio alongside the music. Any line without a clip falls back to
+the browser's built-in speech. It has to be clips: on iPhone the built-in speech and the music fight
+over the audio, and the voice got cut off mid-sentence.
+
+All the wording lives in `index.html`, between the `@voice-lines-begin` and `@voice-lines-end`
+markers: the questions and their replies, the intro, the replay line, and one ending per score.
+A clip's `<id>` is made from its words (a readable start plus a short fingerprint), so **rewording
+a line automatically gives it a new clip name**. The game never plays an old recording over new
+words.
+
+### Recording the lines
+
+Run the **Generate audio** workflow (Actions tab) with `game: yes-or-no`. It rebuilds
+`voice/lines.json`, records only the lines that don't have a clip yet, deletes clips for lines that
+have been reworded or removed, and commits the result. So after editing any wording, just run it
+again. Leave `voice_id` blank for the default ElevenLabs voice, or paste a voice ID from your
+ElevenLabs library to use a different one. Changing voice means re-recording everything, so tick
+`force` too.
+
+Locally:
+
+```sh
+node scripts/extract-yesno-lines.mjs
+LINES_FILE=yesno/voice/lines.json OUT_DIR=yesno/voice \
+  ELEVENLABS_API_KEY=… node scripts/generate-audio.mjs
+```
+
+The answer chimes are tiny Web Audio synth plucks.
 
 ## Background music
 

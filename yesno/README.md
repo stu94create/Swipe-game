@@ -29,7 +29,9 @@ Web-Audio synth plucks. It prefers a warm US-English voice when one is available
 ## Background music
 
 `audio/country-track.mp3` loops in the background, ducks under the narration, and can be muted with
-the ♪ button. To swap the track, just replace that file. If it's ever missing the game still runs —
+the ♪ button. It plays through Web Audio (a decoded buffer on a gain node), not an `<audio>`
+element: on iPhone the speech voice pauses a media element a second into the intro, and iOS ignores
+an element's volume, so it could be neither kept quiet nor ducked. To swap the track, just replace that file. If it's ever missing the game still runs —
 just without music.
 
 ## Questions

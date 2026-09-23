@@ -258,9 +258,6 @@
 </head>
 <body>
 
-  <!-- Looping country instrumental. Drop a Suno-made MP3 at yesno/audio/country-track.mp3. -->
-  <audio id="music" src="audio/country-track.mp3" loop preload="auto"></audio>
-
   <!-- Start -->
   <section class="screen" id="startScreen">
     <div class="kicker">A little country game</div>
@@ -460,9 +457,24 @@ const TAP_MAX_TIME = 450;
 
 /* ============================ Audio engine ============================ */
 let audioCtx = null;
+// Call from inside a tap or swipe wherever possible: iOS only lets a page
+// start or resume its audio in response to the player touching it.
 function ensureAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioCtx) {
+    // Play like a media app, so the ring/silent switch doesn't mute the music
+    // and chimes (Safari 16.4+; other browsers don't have this and don't need it).
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) {}
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // iOS can pause ("interrupt") the context, for instance while the speech
+    // voice has the audio. Pick it back up as soon as it's allowed.
+    audioCtx.onstatechange = () => { if (audioCtx.state !== 'running') resumeAudio(); };
+  }
+  resumeAudio();
+}
+function resumeAudio() {
+  if (!audioCtx || audioCtx.state === 'running' || audioCtx.state === 'closed') return;
+  const p = audioCtx.resume();
+  if (p && p.catch) p.catch(() => {});
 }
 function tone(freq, dur, type = 'sine', vol = 0.15, when = 0) {
   if (!audioCtx) return;
@@ -546,49 +558,73 @@ function speakLine(text, onEnd) {
 }
 
 /* ============================ Background music ============================ */
-const music = document.getElementById('music');
+// The looping country instrumental lives at yesno/audio/country-track.mp3.
+// It plays as a decoded buffer through Web Audio rather than an <audio>
+// element. On iPhone the speech voice takes over the page's audio and pauses a
+// media element about a second into the intro, and iOS ignores an element's
+// volume, so it could never be kept quiet or ducked under the voice. A buffer
+// on a gain node has neither problem.
+const MUSIC_SRC = 'audio/country-track.mp3';
 const MUSIC_VOL = 0.14;      // quiet background — never prominent
 const MUSIC_DUCK = 0.05;     // barely there while the voice is talking
 let musicWanted = true;      // user's mute preference
-let musicReady = false;
-music.volume = 0;
-music.addEventListener('canplay', () => { musicReady = true; });
-music.addEventListener('error', () => { musicReady = false; });
+let voiceActive = false;
+let musicGain = null, musicSource = null, musicLoading = null;
 
-function startMusic() {
-  if (!musicWanted) return;
-  const p = music.play();
-  if (p && p.catch) p.catch(() => {});   // absent file or blocked autoplay — game still works
-  fadeMusic(MUSIC_VOL, 900);
+function setMusicLevel(ms) {
+  if (!musicGain) return;
+  const target = !musicWanted ? 0 : voiceActive ? MUSIC_DUCK : MUSIC_VOL;
+  const g = musicGain.gain, t = audioCtx.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(target, t + ms / 1000);
 }
-let fadeTimer = null;
-function fadeMusic(target, ms) {
-  if (fadeTimer) clearInterval(fadeTimer);
-  const start = music.volume;
-  const steps = Math.max(1, Math.round(ms / 40));
-  let i = 0;
-  fadeTimer = setInterval(() => {
-    i++;
-    music.volume = Math.min(1, Math.max(0, start + (target - start) * (i / steps)));
-    if (i >= steps) { clearInterval(fadeTimer); fadeTimer = null; }
-  }, 40);
+function loadMusic() {
+  if (!musicLoading) {
+    musicLoading = fetch(MUSIC_SRC)
+      .then(r => { if (!r.ok) throw new Error('music ' + r.status); return r.arrayBuffer(); })
+      .then(data => new Promise((ok, no) => {
+        const p = audioCtx.decodeAudioData(data, ok, no);   // older Safari wants the callbacks
+        if (p && p.then) p.then(ok, no);
+      }))
+      // Absent or undecodable: the game runs without music, and the next
+      // start tries again.
+      .catch(() => { musicLoading = null; return null; });
+  }
+  return musicLoading;
+}
+function startMusic() {
+  if (!musicWanted || !audioCtx) return;
+  if (musicSource) { setMusicLevel(900); return; }
+  loadMusic().then(buf => {
+    if (!buf || musicSource) return;
+    if (!musicGain) {
+      musicGain = audioCtx.createGain();
+      musicGain.gain.value = 0;
+      musicGain.connect(audioCtx.destination);
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(musicGain);
+    src.start();
+    musicSource = src;
+    setMusicLevel(900);
+  });
 }
 // Duck the music under narration so the voice sits on top.
 function duckMusic(voiceOn) {
-  if (music.muted || !musicWanted) return;
-  fadeMusic(voiceOn ? MUSIC_DUCK : MUSIC_VOL, voiceOn ? 250 : 600);
+  voiceActive = voiceOn;
+  setMusicLevel(voiceOn ? 250 : 600);
 }
+// Muting just fades the track out; it keeps looping silently underneath, so
+// unmuting picks straight back up with nothing to reload.
 document.getElementById('muteBtn').addEventListener('click', () => {
+  ensureAudio();
   musicWanted = !musicWanted;
-  const btn = document.getElementById('muteBtn');
-  if (musicWanted) {
-    btn.textContent = '♪';
-    startMusic();
-  } else {
-    btn.textContent = '🔇';
-    fadeMusic(0, 300);
-    setTimeout(() => music.pause(), 320);
-  }
+  document.getElementById('muteBtn').textContent = musicWanted ? '♪' : '🔇';
+  if (musicWanted) startMusic();
+  else setMusicLevel(300);
 });
 
 /* ============================ Game state ============================ */
@@ -627,8 +663,10 @@ function showQuestion() {
   transitioning = false;
   acceptingInput = false;   // no answers until the question has been read
   speakLine(q.text, () => { acceptingInput = true; });
-  // Safety: if speech never fires (e.g. muted device), open input anyway.
-  setTimeout(() => { acceptingInput = true; }, 2600);
+  // Safety: if speech never fires (e.g. muted device), open input anyway —
+  // but only for this question, never the one after it.
+  const shown = index;
+  setTimeout(() => { if (index === shown && !transitioning) acceptingInput = true; }, 2600);
 }
 
 function flashVerdict(kind) {
@@ -644,6 +682,7 @@ function answer(kind) {
   acceptingInput = false;
   transitioning = true;
   answers[index] = kind;
+  ensureAudio();   // a swipe is a touch, so iOS lets us wake the audio here
 
   const card = document.getElementById('card');
   card.classList.add(kind === 'yes' ? 'leaving-yes' : 'leaving-no');
@@ -751,7 +790,13 @@ document.getElementById('startScreen').addEventListener('click', () => {
 document.getElementById('completeScreen').addEventListener('click', () => {
   if (!document.body.classList.contains('complete')) return;
   ensureAudio();
+  startMusic();
   startGame();
+});
+// Coming back to the page (after locking the phone, say): wake the audio if
+// the browser allows it without a touch; otherwise the next swipe will.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') resumeAudio();
 });
 bindGestures();
 </script>

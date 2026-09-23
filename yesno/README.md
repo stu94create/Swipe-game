@@ -41,8 +41,12 @@ just without music.
 `QUESTION_POOL` in `index.html` holds 100 questions, each written as
 `[question, reply to a yes, reply to a no]`. The question is shown on the card and read aloud.
 Start each reply with "Yes" or "No", and keep "no" replies accepting: they're preferences, not
-wrong answers. Each game draws 10 of them at random.
+wrong answers.
 
-`TRIAL_QUESTIONS` is a hand-picked set for early trials. While it has questions in it, every game
-plays exactly those, in that order, and the random pool isn't used. Empty it (`[]`) to switch to the
-random draw.
+Games deal 10 at a time from a shuffled "bag" of all 100, so no question repeats until every one
+has been asked. Then the bag is reshuffled, with the game just played moved to the back so it
+isn't repeated straight away. The bag is kept in the browser's `localStorage`, so it carries on
+across visits on the same device.
+
+`TRIAL_QUESTIONS` is a hand-picked set for trials. While it has questions in it, every game plays
+exactly those, in that order, and the random pool isn't used. It's empty by default.

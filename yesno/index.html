@@ -419,21 +419,42 @@ const QUESTION_POOL = [
   ['Do you like wearing comfortable clothes?',   'Yes! Comfy is best.',                             'No? You like to look smart.'],
   ['Do you like choosing what music plays?',     'Yes! You pick the tunes, darlin’.',               'No? Someone else can choose, that’s alright.'],
 ].map(([text, yes, no]) => ({ text, yes, no }));
-// Hand-picked set for the first trials. While it has questions in it, every
-// game plays exactly these, in this order, instead of a random draw. Swap in
-// the ten that matter most to Polly; empty it (`[]`) to use the random pool.
-const TRIAL_QUESTIONS = [
-  'Do you like listening to music?',
-  'Do you like Dolly Parton?',
-  'Do you like dancing?',
-  'Do you like flowers?',
-  'Do you like spending time in a garden?',
-  'Do you like coffee?',
-  'Do you like chocolate?',
-  'Do you like going for a walk?',
-  'Do you like talking with friends?',
-  'Do you like feeling the sun on your face?',
-];
+// Hand-picked set for trials. While it has questions in it, every game plays
+// exactly these, in this order, instead of a random draw. Leave it empty for
+// the random pool. To use it, list questions exactly as written above, e.g.
+//   'Do you like Dolly Parton?',
+const TRIAL_QUESTIONS = [];
+// Random games deal from a shuffled "bag" of the whole pool, ten at a time, so
+// no question comes back until all 100 have been asked; then the bag is
+// reshuffled. The bag is remembered on this device between visits, so opening
+// the page again carries on where the last game left off rather than starting
+// a fresh random draw that could repeat recent questions.
+const BAG_KEY = 'yesno-bag-v1';
+function shuffledIndexes() {
+  const order = QUESTION_POOL.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+// Stored as { bag: questions still to come, last: the game just played }.
+const validIndexes = a => Array.isArray(a) && new Set(a).size === a.length
+  && a.every(i => Number.isInteger(i) && i >= 0 && i < QUESTION_POOL.length);
+function loadBag() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BAG_KEY));
+    // Anything malformed (or left over from a different-sized pool) is dropped.
+    if (saved && validIndexes(saved.bag) && validIndexes(saved.last)) return saved;
+  } catch (_) {}
+  return { bag: [], last: [] };
+}
+function saveBag(saved) {
+  try { localStorage.setItem(BAG_KEY, JSON.stringify(saved)); } catch (_) {}
+}
+// Without storage (a private window, say) the bag still works for as long as
+// the page stays open.
+let memoryBag = { bag: [], last: [] };
 // The active round.
 let deck = [];
 function pickRound() {
@@ -441,12 +462,23 @@ function pickRound() {
     deck = TRIAL_QUESTIONS.map(t => QUESTION_POOL.find(q => q.text === t)).filter(Boolean);
     return;
   }
-  const shuffled = QUESTION_POOL.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  const size = Math.min(ROUND_SIZE, QUESTION_POOL.length);
+  const saved = loadBag();
+  const from = saved.bag.length || saved.last.length ? saved : memoryBag;
+  const last = from.last;
+  let bag = from.bag;
+  if (bag.length < size) {
+    // Top up with a fresh shuffle, leaving out what's still in the bag. The
+    // game just played goes to the back of the new pass, so starting over
+    // never repeats a question from the game before.
+    const skip = new Set(bag), recent = new Set(last);
+    const fresh = shuffledIndexes().filter(i => !skip.has(i));
+    bag = bag.concat(fresh.filter(i => !recent.has(i)), fresh.filter(i => recent.has(i)));
   }
-  deck = shuffled.slice(0, Math.min(ROUND_SIZE, shuffled.length));
+  const dealt = bag.slice(0, size);
+  deck = dealt.map(i => QUESTION_POOL[i]);
+  memoryBag = { bag: bag.slice(size), last: dealt };
+  saveBag(memoryBag);
 }
 const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. There are no right or wrong answers. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
 

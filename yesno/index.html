@@ -306,52 +306,137 @@
 
 <script>
 /* ============================ Question pool ============================ */
-// `text` shows on the card; `say` is what the voice reads aloud. Each game
-// randomly draws ROUND_SIZE of these, so every play-through is a fresh mix.
+// Everyday preferences, so there are no right answers. Each question is both
+// shown on the card and read aloud. Each game randomly draws ROUND_SIZE of them,
+// so every play-through is a fresh mix.
 const ROUND_SIZE = 10;
 const QUESTION_POOL = [
-  { text: 'Do you love Dolly Parton?',                 say: 'Do you love Dolly Parton?' },
-  { text: 'Is Friday night made for two-steppin’?',    say: 'Is Friday night made for two steppin?' },
-  { text: 'Would you rather ride a horse than drive a truck?', say: 'Would you rather ride a horse than drive a truck?' },
-  { text: 'Are cowboy boots the best boots?',          say: 'Are cowboy boots the best boots?' },
-  { text: 'Does a slow country ballad beat a pop song?', say: 'Does a slow country ballad beat a pop song every time?' },
-  { text: 'Is sweet tea better than soda?',            say: 'Is sweet tea better than soda?' },
-  { text: 'Would you dance in the kitchen right now?', say: 'Would you dance in the kitchen if your song came on right now?' },
-  { text: 'Is a front porch the finest seat in the house?', say: 'Is a front porch the finest seat in the house?' },
-  { text: 'Know all the words to a Johnny Cash tune?', say: 'Do you know all the words to at least one Johnny Cash tune?' },
-  { text: 'Is Willie Nelson a national treasure?',     say: 'Is Willie Nelson a national treasure?' },
-  { text: 'Would you two-step at a wedding?',          say: 'Would you two step at a wedding?' },
-  { text: 'Do you sing in the car with the windows down?', say: 'Do you sing in the car with the windows down?' },
-  { text: 'Is a bonfire better than a fancy night out?', say: 'Is a bonfire better than a fancy night out?' },
-  { text: 'Could you happily live on a ranch?',        say: 'Could you happily live on a ranch?' },
-  { text: 'Do you tear up at a good country love song?', say: 'Do you tear up at a good country love song?' },
-  { text: 'Is Shania Twain still the queen?',          say: 'Is Shania Twain still the queen?' },
-  { text: 'Would you wear a cowboy hat out to dinner?', say: 'Would you wear a cowboy hat out to dinner?' },
-  { text: 'Do you believe in love at first sight?',    say: 'Do you believe in love at first sight?' },
-  { text: 'Is a pickup truck a fine spot for a first date?', say: 'Is a pickup truck a fine place for a first date?' },
-  { text: 'Would you learn to line dance?',            say: 'Would you learn to line dance?' },
-  { text: 'Is homemade pie better than store-bought?', say: 'Is homemade pie better than store bought?' },
-  { text: 'Is George Strait the King of Country?',     say: 'Is George Strait the King of Country?' },
-  { text: 'Would you name a dog after a country singer?', say: 'Would you name a dog after a country singer?' },
-  { text: 'Do fireflies beat fireworks?',              say: 'Do fireflies beat fireworks?' },
-  { text: 'Could you square dance if the band struck up?', say: 'Could you square dance if the band struck up right now?' },
-  { text: 'Is a starry night better than a movie?',    say: 'Is a starry night better than a movie?' },
-  { text: 'Would you sing karaoke country to a crowd?', say: 'Would you sing karaoke country in front of a crowd?' },
-  { text: 'Does every good story need a little heartbreak?', say: 'Does every good story need a little heartbreak?' },
-  { text: 'Is Loretta Lynn a legend?',                 say: 'Is Loretta Lynn a legend?' },
-  { text: 'Would you slow dance in the living room tonight?', say: 'Would you slow dance in the living room tonight?' },
-  { text: 'Is the banjo underrated?',                  say: 'Is the banjo an underrated instrument?' },
-  { text: 'Do you prefer a handwritten letter to a text?', say: 'Do you prefer a handwritten letter to a text?' },
-  { text: 'Are good boots worth the splurge?',         say: 'Is a good pair of boots worth the splurge?' },
-  { text: 'Do you like your coffee strong and black?', say: 'Do you like your coffee strong and black?' },
-  { text: 'Is a mason jar a perfectly good glass?',    say: 'Is a mason jar a perfectly good drinking glass?' },
-  { text: 'Would you road-trip with no map and no plan?', say: 'Would you take a road trip with no map and no plan?' },
-  { text: 'Is Kacey Musgraves worth a listen?',        say: 'Is Kacey Musgraves worth a listen?' },
-  { text: 'Can a good song fix a bad day?',            say: 'Do you believe a good song can fix a bad day?' },
+  // Music
+  'Do you like listening to music?',
+  'Do you like Dolly Parton?',
+  'Do you like Dolly Parton’s songs?',
+  'Do you like pop music?',
+  'Do you like music from the 80s?',
+  'Do you like country music?',
+  'Do you like songs you can dance to?',
+  'Do you like slow songs?',
+  'Do you like singing along to songs?',
+  'Do you like listening to music on your phone?',
+  'Do you like choosing the next song?',
+  'Do you like listening to music in the morning?',
+  'Do you like listening to music in the evening?',
+  'Do you like hearing a song you know?',
+  'Do you like trying a new song?',
+  'Do you like hearing a woman sing?',
+  'Do you like hearing a man sing?',
+  'Do you like songs with a guitar?',
+  'Do you like songs with a piano?',
+  'Do you like music played loudly?',
+  // Going out
+  'Do you like going to the cinema?',
+  'Do you like going bowling?',
+  'Do you like going to the pub?',
+  'Do you like going out for dinner?',
+  'Do you like going to a café?',
+  'Do you like going for a walk?',
+  'Do you like going shopping?',
+  'Do you like visiting friends?',
+  'Do you like going to a party?',
+  'Do you like going to a concert?',
+  'Do you like going to a garden centre?',
+  'Do you like going to the park?',
+  'Do you like going out on a sunny day?',
+  'Do you like going for a drive?',
+  'Do you like going somewhere new?',
+  // Food and drink
+  'Do you like coffee?',
+  'Do you like tea?',
+  'Do you like hot chocolate?',
+  'Do you like a glass of wine?',
+  'Do you like orange juice?',
+  'Do you like chocolate?',
+  'Do you like ice cream?',
+  'Do you like cake?',
+  'Do you like biscuits?',
+  'Do you like pizza?',
+  'Do you like chips?',
+  'Do you like pasta?',
+  'Do you like sandwiches?',
+  'Do you like strawberries?',
+  'Do you like eating dinner with other people?',
+  // Flowers and gardening
+  'Do you like flowers?',
+  'Do you like roses?',
+  'Do you like the smell of flowers?',
+  'Do you like holding a bunch of flowers?',
+  'Do you like picking flowers for a vase?',
+  'Do you like spending time in a garden?',
+  'Do you like helping in the garden?',
+  'Do you like watering plants?',
+  'Do you like planting seeds?',
+  'Do you like feeling the leaves on a plant?',
+  'Do you like the smell of fresh grass?',
+  'Do you like sitting outside?',
+  'Do you like hearing birds in the garden?',
+  'Do you like feeling the sun on your face?',
+  'Do you like hearing rain outside?',
+  // Things to do
+  'Do you like dancing?',
+  'Do you like dancing to Dolly Parton?',
+  'Do you like singing?',
+  'Do you like clapping along to music?',
+  'Do you like playing games?',
+  'Do you like telling jokes?',
+  'Do you like hearing a funny story?',
+  'Do you like talking with friends?',
+  'Do you like making a phone call?',
+  'Do you like taking a photo?',
+  'Do you like listening to a story?',
+  'Do you like watching a film?',
+  'Do you like watching a comedy?',
+  'Do you like watching a musical?',
+  'Do you like having a quiet afternoon?',
+  // Touch, sounds and everyday choices
+  'Do you like soft blankets?',
+  'Do you like holding a warm mug?',
+  'Do you like feeling sand in your hands?',
+  'Do you like touching smooth stones?',
+  'Do you like the feel of a soft cushion?',
+  'Do you like the sound of the sea?',
+  'Do you like hearing people laugh?',
+  'Do you like the sound of a guitar?',
+  'Do you like the smell of fresh coffee?',
+  'Do you like the smell of baking?',
+  'Do you like warm weather?',
+  'Do you like a cool breeze?',
+  'Do you like mornings?',
+  'Do you like evenings?',
+  'Do you like weekends?',
+  'Do you like having visitors?',
+  'Do you like being at home?',
+  'Do you like getting dressed up?',
+  'Do you like wearing comfortable clothes?',
+  'Do you like choosing what music plays?',
 ];
-// The active round — a random, non-repeating draw from the pool.
+// Hand-picked set for the first trials. While it has questions in it, every
+// game plays exactly these, in this order, instead of a random draw. Swap in
+// the ten that matter most to Polly; empty it (`[]`) to use the random pool.
+const TRIAL_QUESTIONS = [
+  'Do you like listening to music?',
+  'Do you like Dolly Parton?',
+  'Do you like dancing?',
+  'Do you like flowers?',
+  'Do you like spending time in a garden?',
+  'Do you like coffee?',
+  'Do you like chocolate?',
+  'Do you like going for a walk?',
+  'Do you like talking with friends?',
+  'Do you like feeling the sun on your face?',
+];
+// The active round.
 let deck = [];
 function pickRound() {
+  if (TRIAL_QUESTIONS.length) { deck = TRIAL_QUESTIONS.slice(); return; }
   const shuffled = QUESTION_POOL.slice();
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -359,9 +444,10 @@ function pickRound() {
   }
   deck = shuffled.slice(0, Math.min(ROUND_SIZE, shuffled.length));
 }
-const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
-const YES_LINES = ['Yee-haw! I knew it.', 'Well alright! That\'s a yes.', 'Now we\'re talkin.'];
-const NO_LINES  = ['Aw, alright then. A no it is.', 'Ha! Fair enough, darlin.', 'No? Well, more for me.'];
+const INTRO_LINE = "Well howdy! Let's play a little game. I'll ask you some questions, and all you gotta do is swipe. There are no right or wrong answers. Swipe left for yes, swipe right for no. Alright darlin, here we go.";
+// Said straight after every swipe, so the player hears which way it registered.
+const YES_LINE = 'You chose yes.';
+const NO_LINE  = 'You chose no.';
 
 /* ============================ Gesture tunables ============================ */
 const SWIPE_MIN_DISTANCE = 34;   // px — needs a real swipe, not a tap
@@ -506,7 +592,6 @@ let index = 0;
 let answers = [];          // 'yes' | 'no'
 let acceptingInput = false;
 let transitioning = false;
-let yesCursor = 0, noCursor = 0;
 
 function buildProgress() {
   const wrap = document.getElementById('progress');
@@ -528,7 +613,7 @@ function paintProgress() {
 function showQuestion() {
   const q = deck[index];
   const card = document.getElementById('card');
-  document.getElementById('questionText').textContent = q.text;
+  document.getElementById('questionText').textContent = q;
   document.getElementById('hint').textContent = 'Swipe the card to answer';
   paintProgress();
   // enter animation
@@ -537,7 +622,7 @@ function showQuestion() {
   card.className = 'card';
   transitioning = false;
   acceptingInput = false;   // no answers until the question has been read
-  speakLine(q.say, () => { acceptingInput = true; });
+  speakLine(q, () => { acceptingInput = true; });
   // Safety: if speech never fires (e.g. muted device), open input anyway.
   setTimeout(() => { acceptingInput = true; }, 2600);
 }
@@ -561,10 +646,8 @@ function answer(kind) {
   flashVerdict(kind);
   chimes[kind]();
 
-  // Rotating spoken reaction, then advance.
-  let reaction;
-  if (kind === 'yes') { reaction = YES_LINES[yesCursor % YES_LINES.length]; yesCursor++; }
-  else                { reaction = NO_LINES[noCursor % NO_LINES.length]; noCursor++; }
+  // Confirm which way the swipe registered, then advance.
+  const reaction = kind === 'yes' ? YES_LINE : NO_LINE;
 
   let advanced = false;
   const go = () => {
@@ -595,8 +678,7 @@ const REPLAY_LINE = "Alright, here we go again! Swipe left for yes, right for no
 function startGame() {
   index = 0;
   answers = [];
-  yesCursor = 0; noCursor = 0;
-  pickRound();                 // fresh random 10 for this play-through
+  pickRound();                 // trial set, or a fresh random 10
   // Neutralise the card so no leftover question lingers while the opening plays.
   document.getElementById('questionText').textContent = '…';
   document.getElementById('card').className = 'card';

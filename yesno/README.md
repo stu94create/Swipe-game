@@ -1,7 +1,8 @@
 # Country Yes or No
 
 A tiny, standalone swipe game that lives alongside Ballycrann without touching it.
-A voice asks a handful of playful country-flavoured questions; the player answers by swiping.
+A voice asks ten everyday yes-or-no questions (preferences, so there are no right answers); the
+player answers by swiping, and the voice confirms each one with "You chose yes" or "You chose no".
 
 **Swipe left for YES, swipe right for NO.** (Arrow keys and the on-screen Yes/No labels work on
 desktop too.)
@@ -21,7 +22,7 @@ yesno/
 
 The narration uses the **browser's built-in speech** (`speechSynthesis`) — no external audio, no
 API keys, nothing to generate. Every spoken line lives inline in `index.html` (the `INTRO_LINE`,
-each deck entry's `say`, the yes/no reactions, and `COMPLETE_LINE`). The answer chimes are tiny
+each question, `YES_LINE` / `NO_LINE`, and the closing line in `finish()`). The answer chimes are tiny
 Web-Audio synth plucks. It prefers a warm US-English voice when one is available.
 
 ## Background music
@@ -30,7 +31,11 @@ Web-Audio synth plucks. It prefers a warm US-English voice when one is available
 the ♪ button. To swap the track, just replace that file. If it's ever missing the game still runs —
 just without music.
 
-## Adding a question
+## Questions
 
-Add a `{ text, say }` entry to the `DECK` array in `index.html` — `text` shows on the card, `say`
-is what the voice reads aloud.
+`QUESTION_POOL` in `index.html` holds 100 questions. Each string is both shown on the card and read
+aloud. Each game draws 10 of them at random.
+
+`TRIAL_QUESTIONS` is a hand-picked set for early trials. While it has questions in it, every game
+plays exactly those, in that order, and the random pool isn't used. Empty it (`[]`) to switch to the
+random draw.
